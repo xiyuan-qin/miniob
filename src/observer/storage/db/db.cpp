@@ -145,11 +145,10 @@ RC Db::create_table(const char *table_name, span<const AttrInfoSqlNode> attribut
     return RC::SCHEMA_TABLE_EXIST;
   }
 
-  // 文件路径可以移到Table模块
-  string  table_file_path = table_meta_file(path_.c_str(), table_name);
+  // 此处将外部得到源文件的逻辑移动到了table->create()中
   Table  *table           = new Table();
   int32_t table_id        = next_table_id_++;
-  rc = table->create(this, table_id, table_file_path.c_str(), table_name, path_.c_str(), attributes, storage_format);
+  rc = table->create(this, table_id, table_name, path_.c_str(), attributes, storage_format); //内部会生成表文件的路径
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to create table %s.", table_name);
     delete table;
@@ -158,6 +157,47 @@ RC Db::create_table(const char *table_name, span<const AttrInfoSqlNode> attribut
 
   opened_tables_[table_name] = table;
   LOG_INFO("Create table success. table name=%s, table_id:%d", table_name, table_id);
+  return RC::SUCCESS;
+}
+
+RC Db::drop_table(const char *table_name){
+
+  Table* table = find_table(table_name);
+  if(table == nullptr){
+    LOG_ERROR("Faild to find table %s.", table_name);
+    return RC::SCHEMA_TABLE_NOT_EXIST;
+  }
+  opened_tables_.erase(table_name);
+
+  //元数据
+  string meta_dir = table_meta_file(table->base_dir(), table->name());
+  //数据
+  string data_dir = table_data_file(table->base_dir(), table->name());
+  
+  /* // TODO 检查是否存在，不过暂时不管那么多
+  int fd = ::open(meta_dir.c_str(), O_RDONLY);
+  if (fd < 0) {
+    if (ENOENT == errno) {
+      LOG_ERROR("Failed to delete table file, metadata file don't exist. %s, EEXIST, %s", meta_dir.c_str(), strerror(errno));
+      return RC::SCHEMA_TABLE_EXIST;
+    }
+    LOG_ERROR("Drop table file failed. filename=%s, errmsg=%d:%s", meta_dir.c_str(), errno, strerror(errno));
+    return RC::IOERR_OPEN;
+  }
+  */ 
+
+  // 先析构后删除
+  table->~Table(); 
+
+  ::remove(meta_dir.c_str());
+  ::remove(data_dir.c_str());
+  /* // TODO 这里Index类尚不完整，之后需要实现
+  vector<Index *>* indexes = table->get_all_indexes();
+  for(Index * index : *indexes){
+    string index_dir = table_index_file(table->base_dir(), table->name(), (*index).index_meta);
+    ::remove(index_dir);
+  }
+  */
   return RC::SUCCESS;
 }
 

@@ -52,7 +52,7 @@ Table::~Table()
   LOG_INFO("Table has been closed: %s", name());
 }
 
-RC Table::create(Db *db, int32_t table_id, const char *path, const char *name, const char *base_dir,
+RC Table::create(Db *db, int32_t table_id, const char *name, const char *base_dir,
     span<const AttrInfoSqlNode> attributes, StorageFormat storage_format)
 {
   if (table_id < 0) {
@@ -73,15 +73,17 @@ RC Table::create(Db *db, int32_t table_id, const char *path, const char *name, c
 
   RC rc = RC::SUCCESS;
 
+  string  table_file_path = table_meta_file(base_dir, name); // 获得元数据路径
+
   // 使用 table_name.table记录一个表的元数据
   // 判断表文件是否已经存在
-  int fd = ::open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+  int fd = ::open(table_file_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
   if (fd < 0) {
     if (EEXIST == errno) {
-      LOG_ERROR("Failed to create table file, it has been created. %s, EEXIST, %s", path, strerror(errno));
+      LOG_ERROR("Failed to create table file, it has been created. %s, EEXIST, %s", table_file_path.c_str(), strerror(errno));
       return RC::SCHEMA_TABLE_EXIST;
     }
-    LOG_ERROR("Create table file failed. filename=%s, errmsg=%d:%s", path, errno, strerror(errno));
+    LOG_ERROR("Create table file failed. filename=%s, errmsg=%d:%s", table_file_path.c_str(), errno, strerror(errno));
     return RC::IOERR_OPEN;
   }
 
@@ -95,9 +97,9 @@ RC Table::create(Db *db, int32_t table_id, const char *path, const char *name, c
   }
 
   fstream fs;
-  fs.open(path, ios_base::out | ios_base::binary);
+  fs.open(table_file_path.c_str(), ios_base::out | ios_base::binary);
   if (!fs.is_open()) {
-    LOG_ERROR("Failed to open file for write. file name=%s, errmsg=%s", path, strerror(errno));
+    LOG_ERROR("Failed to open file for write. file name=%s, errmsg=%s", table_file_path.c_str(), strerror(errno));
     return RC::IOERR_OPEN;
   }
 
@@ -252,6 +254,7 @@ RC Table::recover_insert_record(Record &record)
 }
 
 const char *Table::name() const { return table_meta_.name(); }
+const char *Table::base_dir() const { return base_dir_.c_str(); }
 
 const TableMeta &Table::table_meta() const { return table_meta_; }
 
@@ -519,6 +522,10 @@ Index *Table::find_index_by_field(const char *field_name) const
     return this->find_index(index_meta->name());
   }
   return nullptr;
+}
+vector<Index *> *Table::get_all_indexes()
+{
+  return &indexes_;
 }
 
 RC Table::sync()

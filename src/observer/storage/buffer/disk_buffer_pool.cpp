@@ -810,13 +810,13 @@ RC BufferPoolManager::create_file(const char *file_name)
   Page page;
   memset(&page, 0, BP_PAGE_SIZE);
 
-  BPFileHeader *file_header    = (BPFileHeader *)page.data;
-  file_header->allocated_pages = 1;
+  BPFileHeader *file_header    = (BPFileHeader *)page.data;  // page.data是一个柔性数组，强制转换会让它作为存储其他类的空间
+  file_header->allocated_pages = 1;  
   file_header->page_count      = 1;
   file_header->buffer_pool_id  = next_buffer_pool_id_.fetch_add(1);
 
-  char *bitmap = file_header->bitmap;
-  bitmap[0] |= 0x01;
+  char *bitmap = file_header->bitmap; // 得到当前文件的位图
+  bitmap[0] |= 0x01;                  // 把位图第一个页置为1
   if (lseek(fd, 0, SEEK_SET) == -1) {
     LOG_ERROR("Failed to seek file %s to position 0, due to %s .", file_name, strerror(errno));
     close(fd);
@@ -876,7 +876,7 @@ RC BufferPoolManager::close_file(const char *_file_name)
     return RC::INTERNAL;
   }
 
-  id_to_buffer_pools_.erase(iter->second->id());
+  id_to_buffer_pools_.erase(iter->second->id()); //手动维护id_to_buffer_pools_
 
   DiskBufferPool *bp = iter->second;
   buffer_pools_.erase(iter);

@@ -37,6 +37,13 @@ class Db;
  * @brief 表
  *
  */
+
+
+
+/**
+ * 
+ * 
+ */
 class Table
 {
 public:
@@ -45,14 +52,15 @@ public:
 
   /**
    * 创建一个表
-   * @param path 元数据保存的文件(完整路径)
    * @param name 表名
    * @param base_dir 表数据存放的路径
    * @param attribute_count 字段个数
    * @param attributes 字段
    */
-  RC create(Db *db, int32_t table_id, const char *path, const char *name, const char *base_dir,
+  RC create(Db *db, int32_t table_id, const char *name, const char *base_dir,
       span<const AttrInfoSqlNode> attributes, StorageFormat storage_format);
+
+  // create通过DB拥有的BufferPoolManager来创建表数据文件
 
   /**
    * 打开一个表
@@ -103,6 +111,7 @@ public:
 public:
   int32_t     table_id() const { return table_meta_.table_id(); }
   const char *name() const;
+  const char *base_dir() const;
 
   Db *db() const { return db_; }
 
@@ -122,11 +131,13 @@ public:
   Index *find_index(const char *index_name) const;
   Index *find_index_by_field(const char *field_name) const;
 
+  vector<Index *> *get_all_indexes();
+
 private:
   Db                *db_ = nullptr;
   string             base_dir_;
   TableMeta          table_meta_;
-  DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool
+  DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool，里面保存页和帧
   RecordFileHandler *record_handler_   = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
 };

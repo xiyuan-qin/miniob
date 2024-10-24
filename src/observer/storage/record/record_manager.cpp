@@ -543,7 +543,7 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
 {
   RC ret = RC::SUCCESS;
 
-  unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
+  unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_)); // 新创建RecoredPageHandler
   bool                          page_found       = false;
   PageNum                       current_page_num = 0;
 
@@ -597,12 +597,12 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
     // 了页面写锁，然后加lock的锁，但是不会引起死锁。
     // 为什么？
     lock_.lock();
-    free_pages_.insert(current_page_num);
+    free_pages_.insert(current_page_num); // 有一个新的未填满的页
     lock_.unlock();
   }
 
   // 找到空闲位置
-  return record_page_handler->insert_record(data, rid);
+  return record_page_handler->insert_record(data, rid); //真正的写操作
 }
 
 RC RecordFileHandler::recover_insert_record(const char *data, int record_size, const RID &rid)
