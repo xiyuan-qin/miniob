@@ -47,7 +47,7 @@ RC PredicatePhysicalOperator::next()
     }
 
     Value value;
-    rc = expression_->get_value(*tuple, value);
+    rc = expression_->get_value(*tuple, value); // Predicate的expression用来判断是否符合条件
     if (rc != RC::SUCCESS) {
       return rc;
     }

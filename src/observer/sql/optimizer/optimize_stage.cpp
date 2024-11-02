@@ -12,6 +12,8 @@ See the Mulan PSL v2 for more details. */
 // Created by Longda on 2021/4/13.
 //
 
+// update进度: Stmt(OK) -> LogicalPlan(OK) -> create_plan(OK) -> PhysicalPlan(OK) -> Execute(OK)
+
 #include <string.h>
 #include <string>
 
@@ -55,7 +57,7 @@ RC OptimizeStage::handle_request(SQLStageEvent *sql_event)
     return rc;
   }
 
-  unique_ptr<PhysicalOperator> physical_operator;
+  unique_ptr<PhysicalOperator> physical_operator; // 每个逻辑计划都会生成物理计划
   rc = generate_physical_plan(logical_operator, physical_operator, sql_event->session_event()->session());
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to generate physical plan. rc=%s", strrc(rc));

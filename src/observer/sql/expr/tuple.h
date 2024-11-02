@@ -204,11 +204,48 @@ public:
     return RC::SUCCESS;
   }
 
+  RC cell_set(int index, const Value &cell){
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+
+    FieldExpr       *field_expr = speces_[index];
+    const FieldMeta *field_meta = field_expr->field().meta();
+    
+    if(cell.length() > field_meta->len()){
+      LOG_WARN("invalid type length from value");
+      return RC::INVALID_ARGUMENT;
+    }
+    char* start = this->record_->data() + field_meta->offset();
+    memcpy(start, cell.data(), cell.length());
+    return RC::SUCCESS;
+  }
+
   RC spec_at(int index, TupleCellSpec &spec) const override
   {
     const Field &field = speces_[index]->field();
     spec               = TupleCellSpec(table_->name(), field.field_name());
     return RC::SUCCESS;
+  }
+
+  // 新添加的 找到Tuple中特定Filed的索引
+  RC find_cell(const TupleCellSpec &spec, int &index) const{
+    const char *table_name = spec.table_name();
+    const char *field_name = spec.field_name();
+    if (0 != strcmp(table_name, table_->name())) {
+      return RC::NOTFOUND;
+    }
+
+    for (size_t i = 0; i < speces_.size(); ++i) {
+      const FieldExpr *field_expr = speces_[i];
+      const Field     &field      = field_expr->field();
+      if (0 == strcmp(field_name, field.field_name())) {
+        index = i;
+        return RC::SUCCESS; // 假定这里一定成功
+      }
+    }
+    return RC::NOTFOUND;
   }
 
   RC find_cell(const TupleCellSpec &spec, Value &cell) const override
