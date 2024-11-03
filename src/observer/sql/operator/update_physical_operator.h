@@ -16,9 +16,12 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/physical_operator.h"
 #include "sql/parser/parse.h"
+#include "storage/table/table.h"
+#include "storage/index/index.h"
 #include <vector>
 
 class UpdateStmt;
+class Index;
 
 /**
  * @brief 插入物理算子
@@ -47,4 +50,5 @@ private:
 
   Trx                *trx_   = nullptr;
   std::vector<Record> records_;
+  Index             *index_;
 };

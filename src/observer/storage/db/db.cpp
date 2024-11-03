@@ -191,13 +191,14 @@ RC Db::drop_table(const char *table_name){
 
   ::remove(meta_dir.c_str());
   ::remove(data_dir.c_str());
-  /* // TODO 这里Index类尚不完整，之后需要实现
+
+  // 删除索引
   vector<Index *>* indexes = table->get_all_indexes();
   for(Index * index : *indexes){
-    string index_dir = table_index_file(table->base_dir(), table->name(), (*index).index_meta);
-    ::remove(index_dir);
+    string index_dir = table_index_file(table->base_dir(), table->name(), (*index).index_meta().name());
+    ::remove(index_dir.c_str());
   }
-  */
+  
   return RC::SUCCESS;
 }
 

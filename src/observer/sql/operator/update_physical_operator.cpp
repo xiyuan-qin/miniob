@@ -14,8 +14,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/update_physical_operator.h"
 #include "sql/stmt/update_stmt.h"
-#include "storage/table/table.h"
 #include "storage/trx/trx.h"
+#include "storage/table/table.h"
 
 using namespace std;
 
@@ -44,15 +44,31 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       }
   }
   if(RC::SUCCESS != rc) return rc;
+
+  Value real_value = *values_;
   if(to_edit.type() != values_->attr_type()){
-    return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    // 试图转换
+    rc = Value::cast_to(*values_, to_edit.type(), real_value);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to cast value. table name:%s,field name:%s,value:%s ",
+          table_meta.name(), to_edit.name(), values_->to_string().c_str());
+      return rc;
+    }
   }
 
+  index_ = table_->find_index_by_field(field_name_.c_str());
+
   function<bool(Record&)> func = 
-  [this, to_edit](Record& record) -> bool{   // 操作来设置值
-    if(to_edit.len() < this->values_->length()) return false;
+  [this, to_edit, real_value]
+  (Record& record) -> bool{   // 操作来设置值
+    if(to_edit.len() < real_value.length()) return false; // 如果长度不匹配则错误
+    // 更新索引
+    if(this->index_ != nullptr) if(RC::SUCCESS != this->index_->delete_entry(record.data(), &record.rid()))
+      return false;
     char * start = record.data() + to_edit.offset();
-    memcpy(start, this->values_->data(), this->values_->length());
+    memcpy(start,real_value.data(), real_value.length());
+    if(this->index_ != nullptr) if(RC::SUCCESS != this->index_->insert_entry(record.data(), &record.rid()))
+      return false;
     return true;
   };
 
