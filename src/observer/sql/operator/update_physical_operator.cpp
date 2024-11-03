@@ -45,6 +45,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
   }
   if(RC::SUCCESS != rc) return rc;
 
+  // 类型检查
   Value real_value = *values_;
   if(to_edit.type() != values_->attr_type()){
     // 试图转换
@@ -55,18 +56,23 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       return rc;
     }
   }
+  // 长度检查
+  if(real_value.length() > to_edit.len() && to_edit.type() != AttrType::CHARS) return RC::SCHEMA_FIELD_TYPE_MISMATCH; // 如果长度不匹配则错误
 
   index_ = table_->find_index_by_field(field_name_.c_str());
 
   function<bool(Record&)> func = 
   [this, to_edit, real_value]
   (Record& record) -> bool{   // 操作来设置值
-    if(to_edit.len() < real_value.length()) return false; // 如果长度不匹配则错误
     // 更新索引
     if(this->index_ != nullptr) if(RC::SUCCESS != this->index_->delete_entry(record.data(), &record.rid()))
       return false;
     char * start = record.data() + to_edit.offset();
-    memcpy(start,real_value.data(), real_value.length());
+    int copy_len = to_edit.len();
+    if(to_edit.type() == AttrType::CHARS && copy_len > real_value.length()){
+      copy_len = real_value.length() + 1; // 加一个终止字符
+    }
+    memcpy(start,real_value.data(), copy_len);
     if(this->index_ != nullptr) if(RC::SUCCESS != this->index_->insert_entry(record.data(), &record.rid()))
       return false;
     return true;
