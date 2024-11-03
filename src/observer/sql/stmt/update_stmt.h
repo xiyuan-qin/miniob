@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 class Db;
+class FilterStmt;
 
 
 /**
@@ -29,7 +30,7 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table, const string& field_name, const Value *values, int value_amount);
+  UpdateStmt(Table *table, const string& field_name, const Value *values, int value_amount, FilterStmt *filter_stmt);
 
   StmtType type() const override { return StmtType::UPDATE; }
 
@@ -41,10 +42,12 @@ public:
   const string& field_name() const{ return field_name_;}
   const Value *values() { return values_; }
   int    value_amount() const { return value_amount_; }
+  FilterStmt *filter_stmt() const {return filter_stmt_;}
 
 private:
-  Table *table_;
+  Table *table_ = nullptr;
   string field_name_;
   const Value *values_;
   int    value_amount_;
+  FilterStmt *filter_stmt_ = nullptr;
 };

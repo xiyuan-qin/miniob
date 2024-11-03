@@ -250,11 +250,29 @@ RC LogicalPlanGenerator::create_plan(InsertStmt *insert_stmt, unique_ptr<Logical
  */
 RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
-  Table        *table = update_stmt->table();
-  const string&       field_name = update_stmt->field_name();
+  Table                  *table           = update_stmt->table();
+  const string&        field_name         = update_stmt->field_name();
+  const Value*          values            = update_stmt->values();
+  FilterStmt*          filter_stmt        = update_stmt->filter_stmt(); 
+  unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
+  
+  unique_ptr<LogicalOperator> predicate_oper;
 
-  UpdateLogicalOperator *update_operator = new UpdateLogicalOperator(table, field_name ,update_stmt->values());
-  logical_operator.reset(update_operator);
+   RC rc = create_plan(filter_stmt, predicate_oper);
+  if(RC::SUCCESS != rc){
+    return rc;
+  }
+
+  unique_ptr<UpdateLogicalOperator> update_oper(new UpdateLogicalOperator(table, field_name, values));
+
+  if (predicate_oper){
+    predicate_oper->add_child(std::move(table_get_oper));
+    update_oper->add_child(std::move(predicate_oper));
+  }
+  else{
+    update_oper->add_child(std::move(table_get_oper));
+  }
+  logical_operator = std::move(update_oper);
   return RC::SUCCESS;
 }
 

@@ -44,4 +44,7 @@ private:
   string field_name_;
   const Value* values_;
   int field_index_ = -1;
+
+  Trx                *trx_   = nullptr;
+  std::vector<Record> records_;
 };

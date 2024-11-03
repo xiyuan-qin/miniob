@@ -263,14 +263,29 @@ RC PhysicalPlanGenerator::create_plan(InsertLogicalOperator &insert_oper, unique
 RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique_ptr<PhysicalOperator> &oper)
 {
   Table                  *table           = update_oper.table();
-  const string&        field_name         = update_oper.field_name();
-  const Value*          values          = update_oper.values();
-  UpdatePhysicalOperator *update_phy_oper = new UpdatePhysicalOperator(table, field_name, values);
+  const string&          field_name       = update_oper.field_name();
+  const Value*           values           = update_oper.values();
   
-  unique_ptr<TableScanPhysicalOperator> scan_oper(new TableScanPhysicalOperator(table, ReadWriteMode::READ_WRITE));
+  vector<unique_ptr<LogicalOperator>> &child_opers = update_oper.children();
+  unique_ptr<PhysicalOperator> child_physical_oper;
+  
+  RC rc = RC::SUCCESS;
+  if(!child_opers.empty()) {
+    // 获取到第一个孩子，即Predicate Operator
+    LogicalOperator * child_oper = child_opers.front().get();
+    rc = create(*child_oper, child_physical_oper);
+
+    if(rc != RC::SUCCESS) {
+      LOG_WARN("failed to create physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+  
+  UpdatePhysicalOperator *update_phy_oper = new UpdatePhysicalOperator(table, field_name, values);
   oper.reset(update_phy_oper);
-  oper->add_child(std::move(scan_oper));
-  return RC::SUCCESS;
+
+  if(child_physical_oper) oper->add_child(std::move(child_physical_oper));
+  return rc;
 }
 
 RC PhysicalPlanGenerator::create_plan(DeleteLogicalOperator &delete_oper, unique_ptr<PhysicalOperator> &oper)

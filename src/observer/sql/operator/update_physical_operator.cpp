@@ -30,21 +30,12 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     return RC::INTERNAL; // 这里的返回值疑似不正确 不管了
   }
 
-  if (children_.size() < 1){ // 这个child是用来遍历表的
-    LOG_WARN("update operator must has one child at least");
-    return RC::INTERNAL;
-  }
-
-  RC rc = RC::SUCCESS;
-  RecordFileScanner scanner;
-  table_->get_record_scanner(scanner, trx, ReadWriteMode::READ_WRITE);
-  Record record;
-
+  // 获得元数据 拿到record中字段的偏移量
   auto table_meta = table_->table_meta();
   const std::vector<FieldMeta>* field_meta = table_meta.field_metas();
   FieldMeta to_edit;
 
-  rc = RC::RECORD_INVALID_KEY;
+  RC rc = RC::RECORD_INVALID_KEY;
   for(const FieldMeta& meta : *field_meta){
       if(meta.name() == field_name_){
         to_edit = meta;
@@ -62,46 +53,64 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     return true;
   };
 
-  RecordFileHandler* recordhandler = table_->record_handler();
-  while(RC::SUCCESS == (rc = scanner.next(record))){
-    rc = recordhandler->visit_record(record.rid(), func); // 获取rid并修改值
-    if(RC::SUCCESS != rc){
-      scanner.close_scan();
-      return rc;
-    }
-  }
-  /*rc = children_[0]->open(trx); // 开启事务
+  //< 这里进入逻辑部分
+  if(children_.empty()){ // 如果没条件直接全部赋值
+    rc = RC::SUCCESS;
+    RecordFileScanner scanner;
+    table_->get_record_scanner(scanner, trx, ReadWriteMode::READ_WRITE);
+    Record record;
 
-  PhysicalOperator *oper = children_.front().get(); // 获取Scanner
-  while(RC::SUCCESS == (rc = oper->next())){
-    RowTuple *tuple = static_cast<RowTuple*>(oper->current_tuple());
-    if(nullptr == tuple){
-      rc = RC::INTERNAL;
-      LOG_WARN("failed to get next tuple from operator");
-      return rc;
-    }
-
-    if(field_index_ == -1){ // 确保找到field索引
-      TupleCellSpec spec(table_->name(), field_name_.c_str());
-      rc = tuple->find_cell(spec, field_index_);
+    RecordFileHandler* recordhandler = table_->record_handler(); // TODO record_handler换成predicate operator的条件遍历
+    while(RC::SUCCESS == (rc = scanner.next(record))){
+      rc = recordhandler->visit_record(record.rid(), func); // 获取rid并修改值
       if(RC::SUCCESS != rc){
-        LOG_WARN("failed to get index of filed name from operator");
+        scanner.close_scan();
         return rc;
       }
     }
+    scanner.close_scan();
+    if(RC::RECORD_EOF == rc) return RC::SUCCESS;
+    return rc;
+  }
+  else{
+    std::unique_ptr<PhysicalOperator> &child = children_[0];
 
-    Value   to_change;
-    rc = tuple->cell_at(field_index_, to_change);
-    if(RC::SUCCESS != rc){
-      LOG_WARN("failed to get field by field index");
+    rc = child->open(trx);
+    if (rc != RC::SUCCESS){
+      LOG_WARN("failed to open child operator: %s", strrc(rc));
       return rc;
     }
-    to_change.set_value(*values_);
+
+    trx_ =trx;
+
+    while (OB_SUCC(rc = child->next())) {
+      Tuple *tuple = child->current_tuple();
+      if (nullptr == tuple) {
+        LOG_WARN("failed to get current record: %s", strrc(rc));
+        return rc;
+      }
+      RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+      Record   &record    = row_tuple->record();
+      records_.emplace_back(std::move(record)); 
+    }
+    
+    // 先收集记录再修改
+    child->close(); // 关闭筛选器
+
+    RecordFileScanner scanner;
+    table_->get_record_scanner(scanner, trx_, ReadWriteMode::READ_WRITE);
+    RecordFileHandler* recordhandler = table_->record_handler(); // 使用它来修改数据
+
+    for(Record &record : records_){
+      rc = recordhandler->visit_record(record.rid(), func);
+      if(RC::SUCCESS != rc){
+        scanner.close_scan();
+        return rc;
+      }
+    }
+    scanner.close_scan();
+    return rc;
   }
-  if(RC::RECORD_EOF == rc) return RC::SUCCESS;*/
-  scanner.close_scan();
-  if(RC::RECORD_EOF == rc) return RC::SUCCESS;
-  return rc;
 }
 
 RC UpdatePhysicalOperator::next() { 
@@ -110,6 +119,5 @@ RC UpdatePhysicalOperator::next() {
 
 RC UpdatePhysicalOperator::close() 
 { 
-  // children_[0]->close();
   return RC::SUCCESS; 
 }

@@ -16,9 +16,10 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "sql/stmt/filter_stmt.h"
 
-UpdateStmt::UpdateStmt(Table *table, const string& field_name, const Value *values, int value_amount)
-    : table_(table), field_name_(field_name), values_(values), value_amount_(value_amount)
+UpdateStmt::UpdateStmt(Table *table, const string& field_name, const Value *values, int value_amount, FilterStmt *filter_stmt)
+    : table_(table), field_name_(field_name), values_(values), value_amount_(value_amount), filter_stmt_(filter_stmt)
 {}
 
 RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt) // TODO 添加conditions
@@ -36,7 +37,19 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt) // TODO 
     LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
+
+  std::unordered_map<std::string, Table *> table_map;
+  table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
+
+  // 创建过滤器
+  FilterStmt *filter_stmt = nullptr;
+  RC          rc          = FilterStmt::create(
+      db, table, &table_map, update.conditions.data(), static_cast<int>(update.conditions.size()), filter_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
   
-  stmt = new UpdateStmt(table, update.attribute_name, &update.value, 1); // 仅支持一个字段 amount = 1
+  stmt = new UpdateStmt(table, update.attribute_name, &update.value, 1, filter_stmt); // 仅支持一个字段 amount = 1
   return RC::SUCCESS;
 }
