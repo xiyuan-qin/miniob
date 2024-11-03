@@ -44,6 +44,9 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       }
   }
   if(RC::SUCCESS != rc) return rc;
+  if(to_edit.type() != values_->attr_type()){
+    return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  }
 
   function<bool(Record&)> func = 
   [this, to_edit](Record& record) -> bool{   // 操作来设置值
@@ -93,6 +96,8 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       Record   &record    = row_tuple->record();
       records_.emplace_back(std::move(record)); 
     }
+
+    if(RC::RECORD_EOF == rc) rc = RC::SUCCESS;
     
     // 先收集记录再修改
     child->close(); // 关闭筛选器
