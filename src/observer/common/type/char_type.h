@@ -12,6 +12,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "common/type/data_type.h"
+#include "common/type/attr_type.h"
+
 
 /**
  * @brief 固定长度的字符串类型
