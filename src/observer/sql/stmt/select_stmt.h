@@ -43,6 +43,8 @@ public:
 
 public:
   const std::vector<Table *> &tables() const { return tables_; }
+  const std::vector<RelListType> &join_type() const { return join_types_; }
+  const std::vector<FilterStmt *> &join_filter() const { return join_filters_; }
   FilterStmt                 *filter_stmt() const { return filter_stmt_; }
 
   std::vector<std::unique_ptr<Expression>> &query_expressions() { return query_expressions_; }
@@ -51,6 +53,8 @@ public:
 private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;
   std::vector<Table *>                     tables_;
+  std::vector<RelListType>                 join_types_;
+  std::vector<FilterStmt *>                join_filters_;
   FilterStmt                              *filter_stmt_ = nullptr;
   std::vector<std::unique_ptr<Expression>> group_by_;
 };

@@ -104,16 +104,26 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   last_oper = &table_oper;
 
   const std::vector<Table *> &tables = select_stmt->tables();
-  for (Table *table : tables) {
+  const std::vector<RelListType> &join_types = select_stmt->join_type();
+  const std::vector<FilterStmt *> &join_filters = select_stmt->join_filter();
+
+  // 在stmt中保证这三个的大小一样
+  if(!(tables.size() == join_types.size() && join_types.size() == tables.size())){
+    LOG_WARN("select has types, filters, tables size not equal.");
+    return RC::INTERNAL;
+  }
+
+  for (size_t i = 0; i < tables.size(); i++){
+    Table *table = tables[i];
 
     unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
     if (table_oper == nullptr) {
-      table_oper = std::move(table_get_oper);
+      table_oper = std::move(table_get_oper);    // 如果是空的，table_get_oper作为根节点
     } else {
       JoinLogicalOperator *join_oper = new JoinLogicalOperator;
-      join_oper->add_child(std::move(table_oper));
-      join_oper->add_child(std::move(table_get_oper));
-      table_oper = unique_ptr<LogicalOperator>(join_oper);
+      join_oper->add_child(std::move(table_oper));                // 这里加入的是前面的形成的树，是JoinLogiaclOperator
+      join_oper->add_child(std::move(table_get_oper));            // 这里加入的是新的TableGetLogicalOperator
+      table_oper = unique_ptr<LogicalOperator>(join_oper);        // 否则，嵌套递归将每张表加入到孩子中
     }
   }
 
@@ -127,7 +137,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 
   if (predicate_oper) {
     if (*last_oper) {
-      predicate_oper->add_child(std::move(*last_oper));
+      predicate_oper->add_child(std::move(*last_oper));         // 将之前得到的JoinLogicalOperator放到新的Operator中
     }
 
     last_oper = &predicate_oper;

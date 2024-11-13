@@ -346,9 +346,9 @@ RC PhysicalPlanGenerator::create_plan(JoinLogicalOperator &join_oper, unique_ptr
   }
 
   unique_ptr<PhysicalOperator> join_physical_oper(new NestedLoopJoinPhysicalOperator);
-  for (auto &child_oper : child_opers) {
+  for (auto &child_oper : child_opers) {             // 第一个孩子是嵌套的JoinLogicalOperator，第二个孩子是TableGetOperator
     unique_ptr<PhysicalOperator> child_physical_oper;
-    rc = create(*child_oper, child_physical_oper);
+    rc = create(*child_oper, child_physical_oper);     // 最终递归回来的一定是拥有两个TableGet的JoinOperator
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
       return rc;

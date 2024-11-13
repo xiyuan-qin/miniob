@@ -44,7 +44,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   vector<Table *>                tables;
   unordered_map<string, Table *> table_map;
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
-    const char *table_name = select_sql.relations[i].c_str();
+    const char *table_name = select_sql.relations[i].relation.c_str();
+    LOG_INFO("get relation = %s", table_name);
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
@@ -59,6 +60,38 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     binder_context.add_table(table);
     tables.push_back(table);
     table_map.insert({table_name, table});
+  }
+
+  vector<RelListType>    rel_types;
+  vector<FilterStmt* >   filters;
+
+  for (size_t i = 0; i < select_sql.relations.size(); i++) {
+    RelListType rel_type = select_sql.relations[i].join_type;
+    rel_types.push_back(rel_type);
+    if(rel_type == DEFAULT_JOIN){
+        filters.push_back(nullptr);
+    }
+    else if(rel_type == INNER_JOIN){
+      FilterStmt *filter = nullptr;
+
+      RC  rc          = FilterStmt::create(db,
+          nullptr,              // 这里
+          &table_map,           // 和这里  需要保证正确输入
+          select_sql.relations[i].conditions.data(),
+          static_cast<int>(select_sql.conditions.size()),
+          filter);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("cannot construct filter stmt");
+        return rc;
+      }
+
+      filters.push_back(filter);
+    }
+    else{
+      LOG_WARN("unsupport join method");
+      return RC::UNIMPLEMENTED;
+    }
+  
   }
 
   // collect query fields in `select` statement
@@ -104,6 +137,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   SelectStmt *select_stmt = new SelectStmt();
 
   select_stmt->tables_.swap(tables);
+  select_stmt->join_types_.swap(rel_types);      // < for inner join
+  select_stmt->join_filters_.swap(filters);      // < for inner join
   select_stmt->query_expressions_.swap(bound_expressions);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);

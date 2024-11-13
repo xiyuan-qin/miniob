@@ -72,6 +72,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         TABLE
         TABLES
         INDEX
+        INNER 
+        JOIN
         CALC
         SELECT
         DESC
@@ -128,7 +130,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  std::vector<RelationListSqlNode> *        relation_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -557,21 +559,45 @@ relation:
       $$ = $1;
     }
     ;
+
 rel_list:
     relation {
-      $$ = new std::vector<std::string>();
-      $$->push_back($1);
+      $$ = new std::vector<RelationListSqlNode>();
+
+      RelationListSqlNode *node = new RelationListSqlNode;
+      node->relation = $1;
+      node->join_type = DEFAULT_JOIN;
+
+      $$->emplace_back(*node);
+      delete node;
       free($1);
     }
-    | relation COMMA rel_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new std::vector<std::string>;
-      }
+    | rel_list COMMA relation {
+      
+      $$ = $1;
 
-      $$->insert($$->begin(), $1);
-      free($1);
+      RelationListSqlNode *node = new RelationListSqlNode;
+      node->relation = $3;
+      node->join_type = DEFAULT_JOIN;
+
+      $$->emplace_back(*node);
+      delete node;
+
+      free($3);
+    }
+    | rel_list INNER JOIN relation ON condition_list {
+      
+      $$ = $1;
+
+      RelationListSqlNode *node = new RelationListSqlNode;
+      node->relation = $4;
+      node->join_type = INNER_JOIN;
+      node->conditions.swap(*$6);
+      delete $6;
+
+      $$->emplace_back(*node);
+      delete node;
+      free($4);
     }
     ;
 
