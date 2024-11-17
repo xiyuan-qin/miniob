@@ -131,3 +131,140 @@ RC NestedLoopJoinPhysicalOperator::right_next()
   joined_tuple_.set_right(right_tuple_);
   return rc;
 }
+
+// Inner Join
+
+
+InnerNestedLoopJoinPhysicalOperator::InnerNestedLoopJoinPhysicalOperator(std::unique_ptr<Expression> expression)
+{
+  predicates_.emplace_back(std::move(expression));
+}
+
+RC InnerNestedLoopJoinPhysicalOperator::open(Trx *trx)
+{
+  if (children_.size() != 2) {
+    LOG_WARN("nlj operator should have 2 children");
+    return RC::INTERNAL;
+  }
+
+  if(predicates_.size() != 1){
+    LOG_WARN("inner join operator should have 1 expression");
+    return RC::INTERNAL;
+  }
+
+  RC rc         = RC::SUCCESS;
+  left_         = children_[0].get();
+  right_        = children_[1].get();
+  right_closed_ = true;
+  round_done_   = true;
+
+  rc   = left_->open(trx);
+  trx_ = trx;
+  return rc;
+}
+
+RC InnerNestedLoopJoinPhysicalOperator::next()
+{
+  bool left_need_step = (left_tuple_ == nullptr);
+  RC   rc             = RC::SUCCESS;
+  if (!round_done_){
+    rc = right_next();
+    if (rc == RC::SUCCESS){
+      return rc;
+    }
+    else if(rc != RC::RECORD_EOF){
+      return rc;
+    }
+    // 只有RECORD_EOF才允许继续
+  }
+  while (round_done_) {
+    left_need_step = true; 
+    if (left_need_step) {
+      rc = left_next();
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+    }
+    rc = right_next(); // 走到这里的：一定带有round_done
+  }
+  return rc; // EOF不可能，要么是SUCCESS，要么是异常
+}
+
+RC InnerNestedLoopJoinPhysicalOperator::close()
+{
+  RC rc = left_->close();
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to close left oper. rc=%s", strrc(rc));
+  }
+
+  if (!right_closed_) {
+    rc = right_->close();
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to close right oper. rc=%s", strrc(rc));
+    } else {
+      right_closed_ = true;
+    }
+  }
+  return rc;
+}
+
+Tuple *InnerNestedLoopJoinPhysicalOperator::current_tuple() { return &joined_tuple_; }
+
+RC InnerNestedLoopJoinPhysicalOperator::left_next()
+{
+  RC rc = RC::SUCCESS;
+  rc    = left_->next();
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+
+  left_tuple_ = left_->current_tuple();
+  joined_tuple_.set_left(left_tuple_);
+  return rc;
+}
+
+RC InnerNestedLoopJoinPhysicalOperator::right_next()
+{
+  RC rc = RC::SUCCESS;
+  if (round_done_) {
+    if (!right_closed_) {
+      rc = right_->close();
+
+      right_closed_ = true;
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+    }
+
+    rc = right_->open(trx_);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+    right_closed_ = false;
+
+    round_done_ = false;
+  }
+
+  Value result;
+  bool tmp_result;
+  do{
+    rc = right_->next();
+    if (rc != RC::SUCCESS) {
+      if (rc == RC::RECORD_EOF) {
+        round_done_ = true;
+      }
+      return rc;
+    }
+    right_tuple_ = right_->current_tuple();
+    joined_tuple_.set_right(right_tuple_);
+
+    rc = predicates_.front().get()->get_value(joined_tuple_,result);
+    if(rc != RC::SUCCESS){
+      return rc;
+    }
+    tmp_result = result.get_boolean();
+  }while(!tmp_result);
+
+  
+  return rc;
+}

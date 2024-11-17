@@ -24,12 +24,21 @@ See the Mulan PSL v2 for more details. */
 class JoinLogicalOperator : public LogicalOperator
 {
 public:
-  JoinLogicalOperator()          = default;
+  JoinLogicalOperator(RelListType type){
+    join_type_ = type;
+  }
+  JoinLogicalOperator(RelListType type, std::unique_ptr<Expression> expression){
+    join_type_ = type;
+    predicates_.emplace_back(std::move(expression));
+  }
+  auto predicates() -> std::vector<std::unique_ptr<Expression>> & { return predicates_; }
+  RelListType join_type() const {return join_type_;}
+
   virtual ~JoinLogicalOperator() = default;
 
   LogicalOperatorType type() const override { return LogicalOperatorType::JOIN; }
 
 private:
-
-  
+  RelListType join_type_;
+  std::vector<std::unique_ptr<Expression>> predicates_; // 筛选器  
 };

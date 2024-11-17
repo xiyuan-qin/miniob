@@ -345,7 +345,23 @@ RC PhysicalPlanGenerator::create_plan(JoinLogicalOperator &join_oper, unique_ptr
     return RC::INTERNAL;
   }
 
-  unique_ptr<PhysicalOperator> join_physical_oper(new NestedLoopJoinPhysicalOperator);
+  unique_ptr<PhysicalOperator> join_physical_oper;
+  if(join_oper.join_type() == DEFAULT_JOIN){
+    join_physical_oper = std::make_unique<NestedLoopJoinPhysicalOperator>();
+  }
+  else if(join_oper.join_type() == INNER_JOIN){
+    if(join_oper.predicates().size() != 1){
+      LOG_WARN("inner join operator should have 1 expression, but have %d", child_opers.size());
+      return RC::INTERNAL;
+    }
+    join_physical_oper = std::make_unique<InnerNestedLoopJoinPhysicalOperator>(
+      std::move(join_oper.predicates().front())
+    );
+  }
+  else{
+    return RC::UNIMPLEMENTED;
+  }
+
   for (auto &child_oper : child_opers) {             // 第一个孩子是嵌套的JoinLogicalOperator，第二个孩子是TableGetOperator
     unique_ptr<PhysicalOperator> child_physical_oper;
     rc = create(*child_oper, child_physical_oper);     // 最终递归回来的一定是拥有两个TableGet的JoinOperator

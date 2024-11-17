@@ -20,7 +20,11 @@ using namespace std;
 
 RC FieldExpr::get_value(const Tuple &tuple, Value &value) const
 {
-  return tuple.find_cell(TupleCellSpec(table_name(), field_name()), value);
+  const char * name1 = table_name();
+  const char * name2 = field_name();
+  TupleCellSpec ts(name1, name2);
+
+  return tuple.find_cell(ts, value);
 }
 
 bool FieldExpr::equal(const Expression &other) const
@@ -195,6 +199,58 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
     value.set_boolean(bool_value);
   }
   return rc;
+}
+
+RC ComparisonExpr::get_value_both(const Tuple &tuple1, const Tuple &tuple2,
+                   Value &value)
+{
+  Value left_value;
+  Value right_value;
+
+  RC rc = left_->get_value(tuple1, left_value);
+  if (rc != RC::SUCCESS) {
+    swap();
+    rc = left_->get_value(tuple1, left_value);
+    if(rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+  rc = right_->get_value(tuple2, right_value);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  bool bool_value = false;
+
+  rc = compare_value(left_value, right_value, bool_value);
+  if (rc == RC::SUCCESS) {
+    value.set_boolean(bool_value);
+  }
+  return rc;
+}
+
+RC ComparisonExpr::swap(){
+  std::swap(left_,right_);
+  switch(comp_){
+    case LESS_EQUAL:{
+      comp_ = GREAT_EQUAL;
+    }break;
+    case GREAT_EQUAL:{
+      comp_ = LESS_EQUAL;
+    }break;
+    case LESS_THAN:{
+      comp_ = GREAT_THAN;
+    }break;
+    case GREAT_THAN:{
+      comp_ = LESS_THAN;
+    }break;
+    default:{
+      ;
+    }break;
+  }
+  return RC::SUCCESS;
 }
 
 RC ComparisonExpr::eval(Chunk &chunk, std::vector<uint8_t> &select)

@@ -282,8 +282,11 @@ public:
 
   ExprType type() const override { return ExprType::COMPARISON; }
   RC       get_value(const Tuple &tuple, Value &value) const override;
+  RC       get_value_both(const Tuple &tuple1, const Tuple &tuple2,
+                   Value &value); // 可能会swap
   AttrType value_type() const override { return AttrType::BOOLEANS; }
   CompOp   comp() const { return comp_; }
+  RC swap(); // 交换左右的值
 
   /**
    * @brief 根据 ComparisonExpr 获得 `select` 结果。

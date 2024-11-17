@@ -115,15 +115,40 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 
   for (size_t i = 0; i < tables.size(); i++){
     Table *table = tables[i];
+    RelListType typ = join_types[i];
+    FilterStmt * filter = join_filters[i];
 
     unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
+    
     if (table_oper == nullptr) {
       table_oper = std::move(table_get_oper);    // 如果是空的，table_get_oper作为根节点
     } else {
-      JoinLogicalOperator *join_oper = new JoinLogicalOperator;
-      join_oper->add_child(std::move(table_oper));                // 这里加入的是前面的形成的树，是JoinLogiaclOperator
-      join_oper->add_child(std::move(table_get_oper));            // 这里加入的是新的TableGetLogicalOperator
-      table_oper = unique_ptr<LogicalOperator>(join_oper);        // 否则，嵌套递归将每张表加入到孩子中
+      if(typ == INNER_JOIN){
+        if(nullptr == filter){
+          LOG_WARN("INNER JOIN WITH NO CONDITIONS");
+          return RC::INTERNAL;  // 不知道这里应该返回什么
+        }
+        unique_ptr<Expression> expr;
+        RC rc = create_expression(filter, expr);
+        if(RC::SUCCESS != rc || !expr){
+          LOG_WARN("create expr from filter failed");
+          return rc;
+        }
+        LogicalOperator *join_oper = new JoinLogicalOperator(typ, std::move(expr));
+        join_oper->add_child(std::move(table_oper));                // 这里加入的是前面的形成的树，是JoinLogiaclOperator
+        join_oper->add_child(std::move(table_get_oper));            // 这里加入的是新的TableGetLogicalOperator
+        table_oper = unique_ptr<LogicalOperator>(join_oper);        // 否则，嵌套递归将每张表加入到孩子中
+      }
+      else if(typ == DEFAULT_JOIN){ // 将来其它的join加到这里
+        JoinLogicalOperator *join_oper = new JoinLogicalOperator(typ);
+        join_oper->add_child(std::move(table_oper));                // 这里加入的是前面的形成的树，是JoinLogiaclOperator
+        join_oper->add_child(std::move(table_get_oper));            // 这里加入的是新的TableGetLogicalOperator
+        table_oper = unique_ptr<LogicalOperator>(join_oper);        // 否则，嵌套递归将每张表加入到孩子中
+      }
+      else{
+        return RC::UNIMPLEMENTED;
+      }
+      
     }
   }
 
@@ -165,6 +190,75 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 
   logical_operator = std::move(project_oper);
   return RC::SUCCESS;
+}
+
+RC LogicalPlanGenerator::create_expression(FilterStmt *filter_stmt, std::unique_ptr<Expression> &expression)
+{
+  RC                                  rc = RC::SUCCESS;
+  std::vector<unique_ptr<Expression>> cmp_exprs;
+  const std::vector<FilterUnit *>    &filter_units = filter_stmt->filter_units();
+  for (const FilterUnit *filter_unit : filter_units) {
+    const FilterObj &filter_obj_left  = filter_unit->left();
+    const FilterObj &filter_obj_right = filter_unit->right();
+
+    unique_ptr<Expression> left(filter_obj_left.is_attr
+                                    ? static_cast<Expression *>(new FieldExpr(filter_obj_left.field))
+                                    : static_cast<Expression *>(new ValueExpr(filter_obj_left.value)));
+
+    unique_ptr<Expression> right(filter_obj_right.is_attr
+                                     ? static_cast<Expression *>(new FieldExpr(filter_obj_right.field))
+                                     : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
+
+    if (left->value_type() != right->value_type()) {
+      auto left_to_right_cost = implicit_cast_cost(left->value_type(), right->value_type());
+      auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
+      if (left_to_right_cost <= right_to_left_cost && left_to_right_cost != INT32_MAX) {
+        ExprType left_type = left->type();
+        auto cast_expr = make_unique<CastExpr>(std::move(left), right->value_type());
+        if (left_type == ExprType::VALUE) {
+          Value left_val;
+          if (OB_FAIL(rc = cast_expr->try_get_value(left_val)))
+          {
+            LOG_WARN("failed to get value from left child", strrc(rc));
+            return rc;
+          }
+          left = make_unique<ValueExpr>(left_val);
+        } else {
+          left = std::move(cast_expr);
+        }
+      } else if (right_to_left_cost < left_to_right_cost && right_to_left_cost != INT32_MAX) {
+        ExprType right_type = right->type();
+        auto cast_expr = make_unique<CastExpr>(std::move(right), left->value_type());
+        if (right_type == ExprType::VALUE) {
+          Value right_val;
+          if (OB_FAIL(rc = cast_expr->try_get_value(right_val)))
+          {
+            LOG_WARN("failed to get value from right child", strrc(rc));
+            return rc;
+          }
+          right = make_unique<ValueExpr>(right_val);
+        } else {
+          right = std::move(cast_expr);
+        }
+
+      } else {
+        rc = RC::UNSUPPORTED;
+        LOG_WARN("unsupported cast from %s to %s", attr_type_to_string(left->value_type()), attr_type_to_string(right->value_type()));
+        return rc;
+      }
+    }
+
+    ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+    cmp_exprs.emplace_back(cmp_expr);
+  }
+
+  if (!cmp_exprs.empty()) {
+    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
+    expression = std::move(conjunction_expr);
+  }
+  else expression = nullptr;
+
+  return rc;
 }
 
 RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<LogicalOperator> &logical_operator)
@@ -227,7 +321,7 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
     cmp_exprs.emplace_back(cmp_expr);
   }
 
-  unique_ptr<PredicateLogicalOperator> predicate_oper;
+  unique_ptr<PredicateLogicalOperator> predicate_oper(nullptr);  // 如果units为空的，这里为UB，所以加上nullptr
   if (!cmp_exprs.empty()) {
     unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
     predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));

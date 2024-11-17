@@ -78,7 +78,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
           nullptr,              // 这里
           &table_map,           // 和这里  需要保证正确输入
           select_sql.relations[i].conditions.data(),
-          static_cast<int>(select_sql.conditions.size()),
+          static_cast<int>(select_sql.relations[i].conditions.size()),
           filter);
       if (rc != RC::SUCCESS) {
         LOG_WARN("cannot construct filter stmt");

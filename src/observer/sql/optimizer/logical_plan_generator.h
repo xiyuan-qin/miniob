@@ -21,6 +21,9 @@ See the Mulan PSL v2 for more details. */
 #include "common/rc.h"
 #include "common/type/attr_type.h"
 
+#include "storage/record/record_manager.h"
+#include "common/types.h"
+
 class Stmt;
 class CalcStmt;
 class SelectStmt;
@@ -42,6 +45,7 @@ public:
 private:
   RC create_plan(CalcStmt *calc_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
+  RC create_expression(FilterStmt *filter_stmt, std::unique_ptr<Expression> &expression);
   RC create_plan(FilterStmt *filter_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_plan(InsertStmt *insert_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_plan(UpdateStmt *update_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
@@ -51,4 +55,6 @@ private:
   RC create_group_by_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
 
   int implicit_cast_cost(AttrType from, AttrType to);
+
+
 };
