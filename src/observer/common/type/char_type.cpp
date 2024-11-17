@@ -78,8 +78,9 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
       else num = (float)(str[0]-'0');
       for(int i = 1; i < len; i ++){
         if(str[i] == '.'){
-          if(mode == 1) break;
+          if(mode == 1 || str[0] == '-') break;
           mode = 1;
+          continue;
         }
         else if(str[i] < '0' || str[i] > '9') break;
         if(mode == 0)
