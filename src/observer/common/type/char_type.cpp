@@ -45,6 +45,16 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
       }
       result.set_date(y,m,d);
     }break;
+    case AttrType::INTS:
+    {
+      result.attr_type_ = AttrType::INTS;
+      int num = INT32_MAX;
+      if(sscanf(val.value_.pointer_value_, "%d", &num) != 1){
+        LOG_WARN("invalid CHAR format: %s", val.value_.pointer_value_);
+        // 这里不返回
+      }
+      result.set_int(num);
+    }break;
     default: return RC::UNIMPLEMENTED;
   }
   return RC::SUCCESS;
@@ -56,6 +66,9 @@ int CharType::cast_cost(AttrType type)
     return 0;
   }
   if (type == AttrType::DATES) {
+    return 1;
+  }
+  if (type == AttrType::INTS) {
     return 1;
   }
   return INT32_MAX;
