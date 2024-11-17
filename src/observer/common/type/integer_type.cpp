@@ -28,6 +28,28 @@ int IntegerType::compare(const Value &left, const Value &right) const
   return INT32_MAX;
 }
 
+RC IntegerType::cast_to(const Value &val, AttrType type, Value &result) const
+{
+  switch (type) {
+    case AttrType::FLOATS:
+    {
+      result.attr_type_ = AttrType::FLOATS;
+      result.set_float(static_cast<float>(val.get_int()));
+    }break;
+    default: return RC::UNIMPLEMENTED;
+  }
+  return RC::SUCCESS;
+}
+
+int IntegerType::cast_cost(AttrType type)
+{
+  if (type == AttrType::FLOATS) {
+    return 0;
+  }
+  return INT32_MAX;
+}
+
+
 RC IntegerType::add(const Value &left, const Value &right, Value &result) const
 {
   result.set_int(left.get_int() + right.get_int());
