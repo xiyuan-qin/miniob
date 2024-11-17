@@ -48,12 +48,19 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
     case AttrType::INTS:
     {
       result.attr_type_ = AttrType::INTS;
-      int num = INT32_MAX;
-      if(sscanf(val.value_.pointer_value_, "%d", &num) != 1){
-        LOG_WARN("invalid CHAR format: %s", val.value_.pointer_value_);
-        // 这里不返回
+      int num = 0, nega_flag = 1;
+      char *str = val.value_.pointer_value_;
+      int len = strlen(str);
+      if(len == 0){result.set_int(0);break;}
+      if(str[0] == '-') nega_flag = -1;
+      else if(str[0] < '0' || str[0] > '9'){result.set_int(0);break;}
+      else num = str[0]-'0';
+      for(int i = 1; i < len; i ++){
+        if(str[i] < '0' || str[i] > '9') break;
+        num *= 10;
+        num += str[i]-'0';
       }
-      result.set_int(num);
+      result.set_int(num*nega_flag);
     }break;
     default: return RC::UNIMPLEMENTED;
   }
