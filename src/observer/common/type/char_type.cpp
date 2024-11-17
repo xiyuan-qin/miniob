@@ -62,6 +62,38 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
       }
       result.set_int(num*nega_flag);
     }break;
+    case AttrType::FLOATS:
+    {
+      result.attr_type_ = AttrType::FLOATS;
+      float num = 0, nega_flag = 1, k = 0.1;
+      int mode = 0;
+      char *str = val.value_.pointer_value_;
+      int len = strlen(str);
+      if(len == 0){result.set_float(0);break;}
+      if(str[0] == '-'){ 
+        if(len == 1) {result.set_float(0);break;}
+        nega_flag = -1;
+      }
+      else if(str[0] < '0' || str[0] > '9'){result.set_float(0);break;}
+      else num = (float)(str[0]-'0');
+      for(int i = 1; i < len; i ++){
+        if(str[i] == '.'){
+          if(mode == 1) break;
+          mode = 1;
+        }
+        else if(str[i] < '0' || str[i] > '9') break;
+        if(mode == 0)
+        {
+          num *= 10;
+          num += str[i]-'0';
+        }
+        else if(mode == 1){
+          num += ((float)(str[i]-'0')) * k;
+          k /= 10;
+        }
+      }
+      result.set_float(num*nega_flag);
+    }break;
     default: return RC::UNIMPLEMENTED;
   }
   return RC::SUCCESS;
@@ -76,6 +108,9 @@ int CharType::cast_cost(AttrType type)
     return 1;
   }
   if (type == AttrType::INTS) {
+    return 1;
+  }
+  if (type == AttrType::FLOATS) {
     return 1;
   }
   return INT32_MAX;
