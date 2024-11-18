@@ -140,6 +140,7 @@ private:
   union Val
   {
     int32_t int_value_;
+    int64_t long_value_; 
     float   float_value_;
     bool    bool_value_;
     char   *pointer_value_;

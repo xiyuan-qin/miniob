@@ -47,14 +47,18 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_FIELD_MISSING;
   }
 
-  // check the length of TEXT type fields
-  for (int i = 0; i < value_num; ++i) {
-    const FieldMeta *field_meta = table_meta.field(i);
-    if (field_meta->type() == AttrType::TEXTS && values[i].length() > MAX_TEXT_LENGTH) {
-      LOG_WARN("TEXT field value is too long. field name=%s, max length=%d, actual length=%d",
-               field_meta->name(), MAX_TEXT_LENGTH, values[i].length());
-      return RC::DATA_TOO_LONG;
-    }
+  // 在create()函数中增加对TEXT类型字段长度的检查
+  for (int i = 0; i < table_meta.field_num(); ++i) {
+      const FieldMeta *field_meta = table_meta.field(i);
+      
+      // 检查字段类型是否为TEXT，并且字段的长度是否超过限制
+      if (field_meta->type() == AttrType::TEXTS) {
+          if (field_meta->len() > MAX_TEXT_LENGTH) {
+              LOG_WARN("TEXT field length exceeds maximum limit. field name=%s, max length=%d, actual length=%d",
+                      field_meta->name(), MAX_TEXT_LENGTH, field_meta->len());
+              return RC::INVALID_ARGUMENT;
+          }
+      }
   }
   
   // everything alright

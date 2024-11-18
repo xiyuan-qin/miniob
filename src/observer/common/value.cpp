@@ -130,7 +130,7 @@ void Value::set_data(char *data, int length)
       length_            = length;
     } break;
     case AttrType::LONGS:{
-      value_.long_value_ = *(long *)data; // 从数据中读取 long 值
+      value_.long_value_ = *(int64_t *)data; // 从数据中读取 long 值
       length_            = length; // 更新长度
     } break;
     default: {

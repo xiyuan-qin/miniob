@@ -293,9 +293,18 @@ RC Table::make_record(int value_num, const Value *values, Record &record) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
     if (field->type() == AttrType::TEXTS) {
+
       // 处理TEXTS类型字段
-      int64_t offset;
-      rc = write_text(value.data(), value.length(), offset);
+      const char* text_data = value.data();
+      int64_t length = value.length();
+
+      int64_t offset = field->offset();
+
+      char* writable_buffer = new char[length + 1];  // +1 为了 null 终止符
+      memcpy(writable_buffer, text_data, length);
+      writable_buffer[length] = '\0';  // 确保数据以 null 结尾
+
+      rc = write_text(offset, length, writable_buffer);
       if (OB_FAIL(rc)) {
         LOG_WARN("Failed to write TEXTS field data. table name:%s, field name:%s, value:%s",
                   table_meta_.name(), field->name(), value.to_string().c_str());
@@ -305,8 +314,8 @@ RC Table::make_record(int value_num, const Value *values, Record &record) {
       // 将偏移量和长度写入记录
       char *offset_ptr = record_data + field->offset();
       memcpy(offset_ptr, &offset, sizeof(int64_t));
+      
       char *length_ptr = record_data + field->offset() + sizeof(int64_t);
-      int64_t length = value.length();
       memcpy(length_ptr, &length, sizeof(int64_t));
     } else if (field->type() != value.attr_type()) {
       Value real_value;
@@ -372,19 +381,31 @@ RC Table::init_record_handler(const char *base_dir)
 }
 
 RC Table::init_text_handler(const char *base_dir) {
-  text_file_path_ = base_dir + "/" + name() + "_texts.dat";
-  text_file_fd_ = open(text_file_path_.c_str(), O_RDWR | O_CREAT | O_APPEND, 0644);
-  if (text_file_fd_ < 0) {
-    LOG_ERROR("Failed to open text file: %s", strerror(errno));
-    return RC::IOERR_OPEN;
-  }
-  return RC::SUCCESS;
+    // 构造文本文件路径
+    text_file_path_ = std::string(base_dir) + "/" + name() + "_texts.dat";
+    
+    // 调用 open 函数并传递 db_、文件路径和 base_dir
+    RC rc = open(db_, text_file_path_.c_str(), base_dir);
+    if (rc != RC::SUCCESS) {
+        LOG_ERROR("Failed to open text file: %s", strerror(errno));
+        return RC::IOERR_OPEN;
+    }
+
+    return RC::SUCCESS;
 }
 
 
+
 RC Table::write_text(int64_t offset, int64_t length, char *buffer) {
+  // 检查长度是否超过 TEXT 字段的最大长度
+  if (length > BP_TEXT_SLOT_SIZE) {
+    LOG_ERROR("TEXT data length exceeds the maximum allowed size of %d bytes", BP_TEXT_SLOT_SIZE);
+    return RC::INVALID_ARGUMENT;
+  }
+
   if (text_file_fd_ < 0) {
-    RC rc = init_text_file(base_dir_);
+    RC rc = init_text_handler(base_dir_.c_str());
+
     if (rc != RC::SUCCESS) {
       return rc;
     }

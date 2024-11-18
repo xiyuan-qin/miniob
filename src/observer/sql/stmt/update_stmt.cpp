@@ -38,11 +38,19 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt) // TODO 
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  // 检查 TEXT 类型字段的长度
-  if (field_meta->type() == AttrType::TEXTS && update.value.length() > MAX_TEXT_LENGTH) {
-    LOG_WARN("TEXT field value is too long. field name=%s, max length=%d, actual length=%d",
-             field_meta->name(), MAX_TEXT_LENGTH, update.value.length());
-    return RC::DATA_TOO_LONG;
+  // 在create()函数中增加对TEXT类型字段长度的检查
+  const TableMeta &table_meta = table->table_meta();
+  for (int i = 0; i < table_meta.field_num(); ++i) {
+      const FieldMeta *field_meta = table_meta.field(i);
+      
+      // 检查字段类型是否为TEXT，并且字段的长度是否超过限制
+      if (field_meta->type() == AttrType::TEXTS) {
+          if (field_meta->len() > MAX_TEXT_LENGTH) {
+              LOG_WARN("TEXT field length exceeds maximum limit. field name=%s, max length=%d, actual length=%d",
+                      field_meta->name(), MAX_TEXT_LENGTH, field_meta->len());
+              return RC::INVALID_ARGUMENT;
+          }
+      }
   }
 
   std::unordered_map<std::string, Table *> table_map;

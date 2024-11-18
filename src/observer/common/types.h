@@ -62,5 +62,10 @@ enum class ExecutionMode
   CHUNK_ITERATOR
 };
 
+/**
+ * @brief TEXT 字段的最大长度，参考 MySQL 的实现。
+ */
+static constexpr int BP_TEXT_SLOT_SIZE = 65535;
+
 /// page的CRC校验和
 using CheckSum = unsigned int;
