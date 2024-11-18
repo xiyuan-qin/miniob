@@ -16,6 +16,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/condition_filter.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/log_handler.h"
+#include "storage/record/record_manager.h"
+#include "common/log/log.h"
 
 using namespace common;
 
@@ -698,6 +700,83 @@ RC RecordFileHandler::visit_record(const RID &rid, function<bool(Record &)> upda
     rc = page_handler->update_record(rid, record.data());
   }
   return rc;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+TextPageHandler::~TextPageHandler() {
+  cleanup();
+}
+
+RC TextPageHandler::init(DiskBufferPool &buffer_pool, PageNum page_num, bool readonly) {
+  disk_buffer_pool_ = &buffer_pool;
+  readonly_ = readonly;
+  
+  RC ret = disk_buffer_pool_->get_this_page(page_num, &frame_);
+  if (ret != RC::SUCCESS) {
+    LOG_ERROR("Failed to get page handle from disk buffer pool. ret=%d:%s", ret, strrc(ret));
+    return ret;
+  }
+
+  if (readonly) {
+    frame_->read_latch();
+  } else {
+    frame_->write_latch();
+  }
+
+  page_header_ = (PageHeader *)(frame_->data());
+  bitmap_ = frame_->data() + sizeof(PageHeader);
+
+  return RC::SUCCESS;
+}
+
+RC TextPageHandler::init_empty_page(DiskBufferPool &buffer_pool, PageNum page_num, int record_size) {
+  RC rc = init(buffer_pool, page_num, false);
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+
+  page_header_->record_num = 0;
+  page_header_->record_size = record_size;
+  page_header_->record_capacity = BP_PAGE_DATA_SIZE / record_size;
+  page_header_->data_offset = sizeof(PageHeader) + page_bitmap_size(page_header_->record_capacity);
+
+  memset(bitmap_, 0, page_bitmap_size(page_header_->record_capacity));
+
+  return RC::SUCCESS;
+}
+
+RC TextPageHandler::cleanup() {
+  if (disk_buffer_pool_ != nullptr) {
+    if (readonly_) {
+      frame_->read_unlatch();
+    } else {
+      frame_->write_unlatch();
+    }
+    disk_buffer_pool_->unpin_page(frame_);
+    disk_buffer_pool_ = nullptr;
+  }
+  return RC::SUCCESS;
+}
+
+RC TextPageHandler::insert_text(const char *data, RID *rid) {
+  // Implement inserting text data logic here
+  // This should handle variable length text data and possibly span multiple pages
+  return RC::UNIMPLEMENTED;
+}
+
+RC TextPageHandler::update_text(RID *rid, char *rec) {
+  // Implement updating text data logic here
+  return RC::UNIMPLEMENTED;
+}
+
+RC TextPageHandler::delete_text(const RID *rid) {
+  // Implement deleting text data logic here
+  return RC::UNIMPLEMENTED;
+}
+
+RC TextPageHandler::get_text(const RID *rid, char *rec) {
+  // Implement getting text data logic here
+  return RC::UNIMPLEMENTED;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

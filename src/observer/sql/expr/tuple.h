@@ -199,10 +199,70 @@ public:
 
     FieldExpr       *field_expr = speces_[index];
     const FieldMeta *field_meta = field_expr->field().meta();
-    cell.set_type(field_meta->type());
-    cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
+    if (field_meta->type() == AttrType::TEXTS) {
+      // 读取 TEXTS 类型字段逻辑
+      int64_t offset = *(int64_t *)(this->record_->data() + field_meta->offset());
+      int64_t length = *(int64_t *)(this->record_->data() + field_meta->offset() + sizeof(int64_t));
+
+      if (offset < 0 || length <= 0) {
+        LOG_WARN("invalid offset or length for TEXTS field");
+        return RC::INTERNAL;
+      }
+
+      char *text_data = new char[length + 1]; // 动态分配内存
+      memset(text_data, 0, length + 1);
+      // 从表中实际读取大文本数据
+      RC rc = table_->read_text(offset, length, text_data);
+      if (rc != RC::SUCCESS) {
+        delete[] text_data;
+        LOG_WARN("failed to read TEXTS field data");
+        return rc;
+      }
+
+      cell.set_type(AttrType::TEXTS);
+      cell.set_text(text_data, length);
+      delete[] text_data; // 释放动态分配的内存
+    } 
+    else {
+        cell.set_type(field_meta->type());
+        cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
+    }
     return RC::SUCCESS;
   }
+
+  /*RC cell_set(int index, Value &cell) {
+    if (index < 0 || index >= static_cast<int>(speces_.size())) {
+      LOG_WARN("invalid argument. index=%d", index);
+      return RC::INVALID_ARGUMENT;
+    }
+
+    FieldExpr       *field_expr = speces_[index];
+    const FieldMeta *field_meta = field_expr->field().meta();
+
+    if (field_meta->type() == AttrType::TEXTS) {
+      // 设置 TEXTS 类型字段逻辑
+      int64_t *offset_ptr = (int64_t *)(this->record_->data() + field_meta->offset());
+      int64_t *length_ptr = (int64_t *)(this->record_->data() + field_meta->offset() + sizeof(int64_t));
+
+      // 调用 Table 类的 write_text 方法，并传入偏移量、长度和数据缓冲区
+      int64_t new_offset = *offset_ptr; // 获取当前偏移量
+      RC rc = table_->write_text(new_offset, cell.length(), const_cast<char*>(cell.data()));
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to store TEXTS field data");
+        return rc;
+      }
+      *offset_ptr = new_offset + cell.length(); // 更新偏移量
+      *length_ptr = cell.length(); // 更新长度
+    } else {
+      if (cell.length() > field_meta->len()) {
+        LOG_WARN("invalid type length from value");
+        return RC::INVALID_ARGUMENT;
+      }
+      char* start = this->record_->data() + field_meta->offset();
+      memcpy(start, cell.data(), cell.length());
+    }
+    return RC::SUCCESS;
+  }*/
 
   RC cell_set(int index, const Value &cell){
     if (index < 0 || index >= static_cast<int>(speces_.size())) {

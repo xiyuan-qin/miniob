@@ -47,6 +47,16 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_FIELD_MISSING;
   }
 
+  // check the length of TEXT type fields
+  for (int i = 0; i < value_num; ++i) {
+    const FieldMeta *field_meta = table_meta.field(i);
+    if (field_meta->type() == AttrType::TEXTS && values[i].length() > MAX_TEXT_LENGTH) {
+      LOG_WARN("TEXT field value is too long. field name=%s, max length=%d, actual length=%d",
+               field_meta->name(), MAX_TEXT_LENGTH, values[i].length());
+      return RC::DATA_TOO_LONG;
+    }
+  }
+  
   // everything alright
   stmt = new InsertStmt(table, values, value_num);
   return RC::SUCCESS;

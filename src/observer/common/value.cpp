@@ -129,6 +129,10 @@ void Value::set_data(char *data, int length)
       value_.bool_value_ = *(int *)data != 0;
       length_            = length;
     } break;
+    case AttrType::LONGS:{
+      value_.long_value_ = *(long *)data; // 从数据中读取 long 值
+      length_            = length; // 更新长度
+    } break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
     } break;
@@ -200,6 +204,15 @@ void Value::set_value(const Value &value)
   }
 }
 
+void Value::set_long(long val)
+{
+  reset(); // 清除当前值
+  attr_type_        = AttrType::LONGS; // 设置类型为 LONG
+  value_.long_value_ = val; // 存储值
+  length_           = sizeof(val); // 更新长度
+}
+
+
 void Value::set_string_from_other(const Value &other)
 {
   ASSERT(attr_type_ == AttrType::CHARS, "attr type is not CHARS");
@@ -215,6 +228,9 @@ const char *Value::data() const
   switch (attr_type_) {
     case AttrType::CHARS: {
       return value_.pointer_value_;
+    } break;
+    case AttrType::LONGS: {
+      return (const char *)&value_.long_value_; // 返回 LONG 数据的指针
     } break;
     default: {
       return (const char *)&value_;
@@ -331,3 +347,13 @@ bool Value::get_boolean() const
   }
   return false;
 }
+
+long Value::get_long() const
+{
+  if (attr_type_ != AttrType::LONGS) {
+    LOG_WARN("Attribute type is not LONGS.");
+    return 0L; // 如果类型不是 LONGS，返回默认值
+  }
+  return value_.long_value_; // 返回存储的 LONG 值
+}
+

@@ -118,6 +118,8 @@ public:
   const TableMeta &table_meta() const;
 
   RC sync();
+  RC write_text(int64_t offset, int64_t length, char *buffer);
+  RC read_text(int64_t offset, int64_t length, char *buffer) const;
 
 private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);
@@ -126,6 +128,7 @@ private:
 
 private:
   RC init_record_handler(const char *base_dir);
+  RC init_text_handler(const char *base_dir);
 
 public:
   Index *find_index(const char *index_name) const;
@@ -140,4 +143,7 @@ private:
   DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool，里面保存页和帧
   RecordFileHandler *record_handler_   = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
+  int                text_file_fd_ = -1;  // 文件描述符
+  std::string        text_file_path_;  // 文本数据文件路径
+  int64_t            next_text_offset_ = 0;  // 下一个可用的偏移量
 };

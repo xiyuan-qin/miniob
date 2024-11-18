@@ -36,6 +36,8 @@ public:
   friend class BooleanType;
   friend class CharType;
   friend class VectorType;
+  friend class LongType;
+  friend class TextType;
 
   Value() = default;
 
@@ -90,6 +92,13 @@ public:
   void set_data(char *data, int length);
   void set_data(const char *data, int length) { this->set_data(const_cast<char *>(data), length); }
   void set_value(const Value &value);
+  void set_text(const char *text, int64_t length) {
+    attr_type_ = AttrType::TEXTS;
+    value_.pointer_value_ = new char[length + 1];
+    memcpy(value_.pointer_value_, text, length); // 复制文本数据
+    value_.pointer_value_[length] = '\0'; // 确保字符串以空字符结尾
+    length_ = length;
+  }
   void set_date(int y, int m, int d){
     //yyyymmdd
     value_.int_value_ = y*10000 + m*100 + d;
@@ -115,10 +124,12 @@ public:
   float  get_float() const;
   string get_string() const;
   bool   get_boolean() const;
+  int64_t get_long() const;
 
 private:
   void set_int(int val);
   void set_float(float val);
+  void set_long(int64_t val);
   void set_string(const char *s, int len = 0);
   void set_string_from_other(const Value &other);
 

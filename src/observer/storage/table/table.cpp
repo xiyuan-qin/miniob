@@ -38,6 +38,10 @@ Table::~Table()
     record_handler_ = nullptr;
   }
 
+  if (text_file_fd_ >= 0) {
+    close(text_file_fd_);
+  }
+
   if (data_buffer_pool_ != nullptr) {
     data_buffer_pool_->close_file();
     data_buffer_pool_ = nullptr;
@@ -125,6 +129,12 @@ RC Table::create(Db *db, int32_t table_id, const char *name, const char *base_di
     return rc;
   }
 
+  rc = init_text_handler(base_dir);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to init text handler for table %s.", name);
+    return rc;
+  }
+
   LOG_INFO("Successfully create table %s:%s", base_dir, name);
   return rc;
 }
@@ -154,6 +164,13 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to open table %s due to init record handler failed.", base_dir);
     // don't need to remove the data_file
+    return rc;
+  }
+
+  // 初始化 TEXT 数据处理程序
+  rc = init_text_handler(base_dir);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to init text handler for table %s.", name());
     return rc;
   }
 
@@ -258,8 +275,7 @@ const char *Table::base_dir() const { return base_dir_.c_str(); }
 
 const TableMeta &Table::table_meta() const { return table_meta_; }
 
-RC Table::make_record(int value_num, const Value *values, Record &record)
-{
+RC Table::make_record(int value_num, const Value *values, Record &record) {
   RC rc = RC::SUCCESS;
   // 检查字段类型是否一致
   if (value_num + table_meta_.sys_field_num() != table_meta_.field_num()) {
@@ -269,19 +285,35 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
   const int normal_field_start_index = table_meta_.sys_field_num();
   // 复制所有字段的值
-  int   record_size = table_meta_.record_size();
+  int record_size = table_meta_.record_size();
   char *record_data = (char *)malloc(record_size);
   memset(record_data, 0, record_size);
 
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &    value = values[i];
-    if (field->type() != value.attr_type()) {
+    const Value &value = values[i];
+    if (field->type() == AttrType::TEXTS) {
+      // 处理TEXTS类型字段
+      int64_t offset;
+      rc = write_text(value.data(), value.length(), offset);
+      if (OB_FAIL(rc)) {
+        LOG_WARN("Failed to write TEXTS field data. table name:%s, field name:%s, value:%s",
+                  table_meta_.name(), field->name(), value.to_string().c_str());
+        free(record_data);
+        return rc;
+      }
+      // 将偏移量和长度写入记录
+      char *offset_ptr = record_data + field->offset();
+      memcpy(offset_ptr, &offset, sizeof(int64_t));
+      char *length_ptr = record_data + field->offset() + sizeof(int64_t);
+      int64_t length = value.length();
+      memcpy(length_ptr, &length, sizeof(int64_t));
+    } else if (field->type() != value.attr_type()) {
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
       if (OB_FAIL(rc)) {
-        LOG_WARN("failed to cast value. table name:%s,field name:%s,value:%s ",
-            table_meta_.name(), field->name(), value.to_string().c_str());
+        LOG_WARN("Failed to cast value. table name:%s, field name:%s, value:%s",
+                  table_meta_.name(), field->name(), value.to_string().c_str());
         break;
       }
       rc = set_value_to_record(record_data, real_value, field);
@@ -289,8 +321,9 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
       rc = set_value_to_record(record_data, value, field);
     }
   }
+
   if (OB_FAIL(rc)) {
-    LOG_WARN("failed to make record. table name:%s", table_meta_.name());
+    LOG_WARN("Failed to make record. table name:%s", table_meta_.name());
     free(record_data);
     return rc;
   }
@@ -336,6 +369,60 @@ RC Table::init_record_handler(const char *base_dir)
   }
 
   return rc;
+}
+
+RC Table::init_text_handler(const char *base_dir) {
+  text_file_path_ = base_dir + "/" + name() + "_texts.dat";
+  text_file_fd_ = open(text_file_path_.c_str(), O_RDWR | O_CREAT | O_APPEND, 0644);
+  if (text_file_fd_ < 0) {
+    LOG_ERROR("Failed to open text file: %s", strerror(errno));
+    return RC::IOERR_OPEN;
+  }
+  return RC::SUCCESS;
+}
+
+
+RC Table::write_text(int64_t offset, int64_t length, char *buffer) {
+  if (text_file_fd_ < 0) {
+    RC rc = init_text_file(base_dir_);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
+  }
+
+  // 移动文件偏移量到指定位置
+  if (lseek(text_file_fd_, offset, SEEK_SET) < 0) {
+    LOG_ERROR("Failed to seek in text file: %s", strerror(errno));
+    return RC::IOERR_SEEK;
+  }
+
+  // 将文本数据写入文件
+  ssize_t written = write(text_file_fd_, buffer, length);
+  if (written < 0 || written != length) {
+    LOG_ERROR("Failed to write text data: %s", strerror(errno));
+    return RC::IOERR_WRITE;
+  }
+
+  // 更新偏移量
+  next_text_offset_ = offset + length;
+
+  return RC::SUCCESS;
+}
+
+RC Table::read_text(int64_t offset, int64_t length, char *buffer) const{
+  if (lseek(text_file_fd_, offset, SEEK_SET) < 0) {
+    LOG_ERROR("Failed to seek in text file: %s", strerror(errno));
+    return RC::IOERR_SEEK;
+  }
+
+  // 从文件中读取文本数据
+  ssize_t read_bytes = read(text_file_fd_, buffer, length);
+  if (read_bytes < 0 || read_bytes != length) {
+    LOG_ERROR("Failed to read text data: %s", strerror(errno));
+    return RC::IOERR_READ;
+  }
+
+  return RC::SUCCESS;
 }
 
 RC Table::get_record_scanner(RecordFileScanner &scanner, Trx *trx, ReadWriteMode mode)

@@ -38,6 +38,13 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt) // TODO 
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
+  // 检查 TEXT 类型字段的长度
+  if (field_meta->type() == AttrType::TEXTS && update.value.length() > MAX_TEXT_LENGTH) {
+    LOG_WARN("TEXT field value is too long. field name=%s, max length=%d, actual length=%d",
+             field_meta->name(), MAX_TEXT_LENGTH, update.value.length());
+    return RC::DATA_TOO_LONG;
+  }
+
   std::unordered_map<std::string, Table *> table_map;
   table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
 

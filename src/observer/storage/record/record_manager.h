@@ -416,6 +416,35 @@ private:
   TableMeta             *table_meta_;
 };
 
+
+class TextPageHandler
+{
+public:
+  TextPageHandler() : disk_buffer_pool_(nullptr), frame_(nullptr), readonly_(false), page_header_(nullptr), bitmap_(nullptr) {}
+  ~TextPageHandler();
+
+  RC init(DiskBufferPool &buffer_pool, PageNum page_num, bool readonly);
+
+  RC init_empty_page(DiskBufferPool &buffer_pool, PageNum page_num, int record_size =  BP_TEXT_SLOT_SIZE);
+
+  RC cleanup();
+
+  RC insert_text(const char *data, RID *rid);
+
+  RC update_text(RID *rid ,char *rec);
+
+  RC delete_text(const RID *rid);
+
+  RC get_text(const RID *rid ,char *rec);
+
+protected:
+  DiskBufferPool *disk_buffer_pool_ = nullptr;
+  Frame          *frame_            = nullptr;
+  bool            readonly_         = false;
+  PageHeader     *page_header_      = nullptr;
+  char           *bitmap_           = nullptr;
+
+};
 /**
  * @brief 遍历某个文件中所有记录
  * @ingroup RecordManager
