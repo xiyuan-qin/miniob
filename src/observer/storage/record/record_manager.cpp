@@ -759,24 +759,107 @@ RC TextPageHandler::cleanup() {
 }
 
 RC TextPageHandler::insert_text(const char *data, RID *rid) {
-  // Implement inserting text data logic here
-  // This should handle variable length text data and possibly span multiple pages
-  return RC::UNIMPLEMENTED;
+    int data_length = strlen(data);
+
+    // 检查数据长度是否超出允许范围
+    if (data_length > MAX_TEXT_LENGTH) {
+        LOG_ERROR("TEXT data too long. Max length: %d, given length: %d", MAX_TEXT_LENGTH, data_length);
+        return RC::INVALID_ARGUMENT;
+    }
+
+    // 查找空闲槽位
+    int free_slot = -1;
+    for (int i = 0; i < page_header_->record_capacity; i++) {
+        if (!(bitmap_[i / 8] & (1 << (i % 8)))) {  // 找到第一个空闲位
+            free_slot = i;
+            break;
+        }
+    }
+    if (free_slot == -1) {
+        LOG_WARN("No free slot available for TEXT data.");
+        return RC::RECORD_NOMEM;
+    }
+
+    // 写入数据到当前页面
+    char *write_position = frame_->data() + page_header_->data_offset + free_slot * page_header_->record_size;
+    memcpy(write_position, data, data_length);
+    memset(write_position + data_length, 0, page_header_->record_size - data_length);  // 填充剩余空间
+
+    // 更新元数据
+    page_header_->record_num++;
+    bitmap_[free_slot / 8] |= (1 << (free_slot % 8));  // 设置位图对应位为 1
+
+    // 设置 RID
+    rid->page_num = frame_->page_num();
+    rid->slot_num = free_slot;
+
+    frame_->mark_dirty();
+    return RC::SUCCESS;
 }
 
-RC TextPageHandler::update_text(RID *rid, char *rec) {
-  // Implement updating text data logic here
-  return RC::UNIMPLEMENTED;
+RC TextPageHandler::update_text(RID *rid, const char *data) {
+    int data_length = strlen(data);
+
+    // 检查数据长度是否超出允许范围
+    if (data_length > MAX_TEXT_LENGTH) {
+        LOG_ERROR("TEXT data too long. Max length: %d, given length: %d", MAX_TEXT_LENGTH, data_length);
+        return RC::INVALID_ARGUMENT;
+    }
+
+    // 定位 TEXT 数据
+    if (rid->slot_num >= page_header_->record_capacity || 
+        !(bitmap_[rid->slot_num / 8] & (1 << (rid->slot_num % 8)))) {
+        LOG_ERROR("Invalid RID or empty slot: page_num=%d, slot_num=%d", rid->page_num, rid->slot_num);
+        return RC::RECORD_NOT_EXIST;
+    }
+    char *existing_data = frame_->data() + page_header_->data_offset + rid->slot_num * page_header_->record_size;
+
+    // 更新数据
+    memset(existing_data, 0, page_header_->record_size);  // 清除原数据
+    memcpy(existing_data, data, data_length);
+
+    frame_->mark_dirty();
+    return RC::SUCCESS;
 }
 
 RC TextPageHandler::delete_text(const RID *rid) {
-  // Implement deleting text data logic here
-  return RC::UNIMPLEMENTED;
+    // 定位 TEXT 数据
+    if (rid->slot_num >= page_header_->record_capacity || 
+        !(bitmap_[rid->slot_num / 8] & (1 << (rid->slot_num % 8)))) {
+        LOG_ERROR("Invalid RID or empty slot: page_num=%d, slot_num=%d", rid->page_num, rid->slot_num);
+        return RC::RECORD_NOT_EXIST;
+    }
+    char *existing_data = frame_->data() + page_header_->data_offset + rid->slot_num * page_header_->record_size;
+
+    // 清除数据
+    memset(existing_data, 0, page_header_->record_size);
+
+    // 更新位图
+    bitmap_[rid->slot_num / 8] &= ~(1 << (rid->slot_num % 8));  // 清除位图对应位
+
+    // 更新页面头信息
+    page_header_->record_num--;
+
+    frame_->mark_dirty();
+    return RC::SUCCESS;
 }
 
-RC TextPageHandler::get_text(const RID *rid, char *rec) {
-  // Implement getting text data logic here
-  return RC::UNIMPLEMENTED;
+RC TextPageHandler::get_text(const RID *rid, char *buffer) {
+    // 定位 TEXT 数据
+    if (rid->slot_num >= page_header_->record_capacity || 
+        !(bitmap_[rid->slot_num / 8] & (1 << (rid->slot_num % 8)))) {
+        LOG_ERROR("Invalid RID or empty slot: page_num=%d, slot_num=%d", rid->page_num, rid->slot_num);
+        return RC::RECORD_NOT_EXIST;
+    }
+    char *existing_data = frame_->data() + page_header_->data_offset + rid->slot_num * page_header_->record_size;
+
+    // 复制数据到缓冲区
+    memcpy(buffer, existing_data, page_header_->record_size);
+
+    // 确保以 NULL 结尾
+    buffer[page_header_->record_size - 1] = '\0';
+
+    return RC::SUCCESS;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
