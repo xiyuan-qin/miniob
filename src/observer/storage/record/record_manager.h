@@ -431,11 +431,11 @@ public:
 
   RC insert_text(const char *data, RID *rid);
 
-  RC update_text(RID *rid ,char *rec);
+  RC update_text(RID *rid ,const char *data);
 
   RC delete_text(const RID *rid);
 
-  RC get_text(const RID *rid ,char *rec);
+  RC get_text(const RID *rid ,char *buffer);
 
 protected:
   DiskBufferPool *disk_buffer_pool_ = nullptr;
