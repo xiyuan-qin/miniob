@@ -408,13 +408,11 @@ RC Table::init_text_handler(const char *base_dir) {
 
 
 RC Table::write_text(int64_t offset, int64_t length, const char *buffer) {
-    // 检查是否超过最大允许长度
     if (length > MAX_TEXT_LENGTH) {
         LOG_ERROR("TEXT data length exceeds the maximum allowed size of %d bytes", MAX_TEXT_LENGTH);
         return RC::INVALID_ARGUMENT;
     }
 
-    // 初始化 TEXT 文件句柄
     if (text_file_fd_ < 0) {
         RC rc = init_text_handler(base_dir_.c_str());
         if (rc != RC::SUCCESS) {
@@ -422,17 +420,20 @@ RC Table::write_text(int64_t offset, int64_t length, const char *buffer) {
         }
     }
 
-    // 检查写入偏移是否合法
     if (lseek(text_file_fd_, offset, SEEK_SET) < 0) {
         LOG_ERROR("Failed to seek in text file: Offset: %ld, Error: %s", offset, strerror(errno));
         return RC::IOERR_SEEK;
     }
 
-    // 写入数据到文件
     ssize_t written = write(text_file_fd_, buffer, length);
     if (written < 0 || written != length) {
         LOG_ERROR("Failed to write text data: Offset: %ld, Length: %ld, Error: %s", offset, length, strerror(errno));
         return RC::IOERR_WRITE;
+    }
+
+    // 更新全局偏移量
+    if (offset + length > next_text_offset_) {
+        next_text_offset_ = offset + length;
     }
 
     return RC::SUCCESS;
