@@ -75,7 +75,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     //处理text
     else if (to_edit.type() == AttrType::TEXTS) {
       // 如果是 TEXT 类型，需要写入文本文件并更新记录中的偏移和长度
-      int64_t offset = table_->next_text_offset(); // 获取当前文本文件写入的偏移量
+      int64_t offset = *(reinterpret_cast<int64_t *>(start));
       RC rc = table_->write_text(offset, real_value.length(), real_value.data());
       if (rc != RC::SUCCESS) {
           LOG_WARN("Failed to write TEXT data. field_name=%s", to_edit.name());
@@ -83,9 +83,8 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       }
 
       // 更新记录中的偏移量和长度
-      int64_t *offset_ptr = reinterpret_cast<int64_t *>(start);                       // 偏移量字段
+      //int64_t *offset_ptr = reinterpret_cast<int64_t *>(start);                       // 偏移量字段
       int64_t *length_ptr = reinterpret_cast<int64_t *>(start + sizeof(int64_t));    // 长度字段
-      *offset_ptr = offset;
       *length_ptr = real_value.length();
 
       return true; // 更新成功，直接返回

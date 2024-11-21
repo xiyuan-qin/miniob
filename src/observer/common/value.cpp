@@ -231,6 +231,9 @@ const char *Value::data() const
     case AttrType::LONGS: {
       return (const char *)&value_.long_value_; // 返回 LONG 数据的指针
     } break;
+    case AttrType::TEXTS: {
+      return value_.pointer_value_;
+    }break;
     default: {
       return (const char *)&value_;
     } break;
