@@ -95,6 +95,11 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
       }
       result.set_float(num*nega_flag);
     }break;
+    case AttrType::TEXTS:
+    {
+      result.attr_type_ = AttrType::TEXTS;
+      result.set_text(val.value_.pointer_value_, strlen(val.value_.pointer_value_));
+    }break;
     default: return RC::UNIMPLEMENTED;
   }
   return RC::SUCCESS;
@@ -113,6 +118,9 @@ int CharType::cast_cost(AttrType type)
   }
   if (type == AttrType::FLOATS) {
     return 1;
+  }
+  if (type == AttrType::TEXTS) {
+    return 0;
   }
   return INT32_MAX;
 }

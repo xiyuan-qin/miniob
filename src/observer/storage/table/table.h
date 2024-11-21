@@ -112,6 +112,9 @@ public:
   int32_t     table_id() const { return table_meta_.table_id(); }
   const char *name() const;
   const char *base_dir() const;
+  // 获取当前文本数据文件的下一个可用偏移量
+  int64_t next_text_offset() const { return next_text_offset_; }
+
 
   Db *db() const { return db_; }
 

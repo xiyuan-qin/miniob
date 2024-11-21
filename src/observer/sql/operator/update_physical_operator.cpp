@@ -57,7 +57,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     }
   }
   // 长度检查
-  if(real_value.length() > to_edit.len() && to_edit.type() != AttrType::CHARS) return RC::SCHEMA_FIELD_TYPE_MISMATCH; // 如果长度不匹配则错误
+  if(real_value.length() > to_edit.len() && to_edit.type() != AttrType::CHARS && to_edit.type() != AttrType::TEXTS) return RC::SCHEMA_FIELD_TYPE_MISMATCH; // 如果长度不匹配则错误
 
   index_ = table_->find_index_by_field(field_name_.c_str());
 
@@ -72,6 +72,25 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     if(to_edit.type() == AttrType::CHARS && copy_len > real_value.length()){
       copy_len = real_value.length() + 1; // 加一个终止字符
     }
+    //处理text
+    else if (to_edit.type() == AttrType::TEXTS) {
+      // 如果是 TEXT 类型，需要写入文本文件并更新记录中的偏移和长度
+      int64_t offset = table_->next_text_offset(); // 获取当前文本文件写入的偏移量
+      RC rc = table_->write_text(offset, real_value.length(), real_value.data());
+      if (rc != RC::SUCCESS) {
+          LOG_WARN("Failed to write TEXT data. field_name=%s", to_edit.name());
+          return false; // 返回 false，表示更新失败
+      }
+
+      // 更新记录中的偏移量和长度
+      int64_t *offset_ptr = reinterpret_cast<int64_t *>(start);                       // 偏移量字段
+      int64_t *length_ptr = reinterpret_cast<int64_t *>(start + sizeof(int64_t));    // 长度字段
+      *offset_ptr = offset;
+      *length_ptr = real_value.length();
+
+      return true; // 更新成功，直接返回
+    }
+    
     memcpy(start,real_value.data(), copy_len);
     if(this->index_ != nullptr) if(RC::SUCCESS != this->index_->insert_entry(record.data(), &record.rid()))
       return false;

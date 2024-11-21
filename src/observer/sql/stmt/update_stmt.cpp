@@ -38,23 +38,25 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt) // TODO 
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  // 在create()函数中增加对TEXT类型字段长度的检查
-  const TableMeta &table_meta = table->table_meta();
-  for (int i = 0; i < table_meta.field_num(); ++i) {
-      const FieldMeta *field_meta = table_meta.field(i);
-      
-      // 检查字段类型是否为TEXT，并且字段的长度是否超过限制
-      if (field_meta->type() == AttrType::TEXTS) {
-          if (field_meta->len() > MAX_TEXT_LENGTH) {
-              LOG_WARN("TEXT field length exceeds maximum limit. field name=%s, max length=%d, actual length=%d",
-                      field_meta->name(), MAX_TEXT_LENGTH, field_meta->len());
-              return RC::INVALID_ARGUMENT;
-          }
-      }
-  }
-
   std::unordered_map<std::string, Table *> table_map;
   table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
+
+  // 检查字段是否存在
+  const TableMeta &table_meta = table->table_meta();
+  const FieldMeta *field_meta = table_meta.field(update.attribute_name.c_str());
+  if (nullptr == field_meta) {
+    LOG_WARN("field not found in table. field_name=%s, table_name=%s", update.attribute_name.c_str(), table_name);
+    return RC::SCHEMA_FIELD_NOT_EXIST;
+  }
+
+  // 检查字段类型并验证值是否合法
+  if (field_meta->type() == AttrType::TEXTS) {
+    if (update.value.length() > MAX_TEXT_LENGTH) {
+      LOG_WARN("TEXT value exceeds maximum limit. field_name=%s, max_length=%d, value_length=%d",
+               field_meta->name(), MAX_TEXT_LENGTH, update.value.length());
+      return RC::INVALID_ARGUMENT;
+    }
+  }
 
   // 创建过滤器
   FilterStmt *filter_stmt = nullptr;
