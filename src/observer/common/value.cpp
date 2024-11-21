@@ -154,6 +154,13 @@ void Value::set_float(float val)
   value_.float_value_ = val;
   length_             = sizeof(val);
 }
+void Value::set_long(int64_t val)
+{
+  reset();
+  attr_type_          = AttrType::LONGS;
+  value_.long_value_ = val;
+  length_             = sizeof(val);
+}
 void Value::set_boolean(bool val)
 {
   reset();
@@ -202,14 +209,6 @@ void Value::set_value(const Value &value)
       ASSERT(false, "got an invalid value type");
     } break;
   }
-}
-
-void Value::set_long(long val)
-{
-  reset(); // 清除当前值
-  attr_type_        = AttrType::LONGS; // 设置类型为 LONG
-  value_.long_value_ = val; // 存储值
-  length_           = sizeof(val); // 更新长度
 }
 
 
@@ -348,12 +347,12 @@ bool Value::get_boolean() const
   return false;
 }
 
-long Value::get_long() const
-{
-  if (attr_type_ != AttrType::LONGS) {
-    LOG_WARN("Attribute type is not LONGS.");
-    return 0L; // 如果类型不是 LONGS，返回默认值
+string Value::get_text() const{
+  if (attr_type_ != AttrType::TEXTS) {
+    LOG_WARN("Attribute type is not text");
+    return 0L;
   }
-  return value_.long_value_; // 返回存储的 LONG 值
+  std::string str(value_.pointer_value_);
+  return str;
 }
 

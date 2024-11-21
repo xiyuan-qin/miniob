@@ -118,7 +118,7 @@ public:
   const TableMeta &table_meta() const;
 
   RC sync();
-  RC write_text(int64_t offset, int64_t length, char *buffer);
+  RC write_text(int64_t offset, int64_t length, const char *data);
   RC read_text(int64_t offset, int64_t length, char *buffer) const;
 
 private:

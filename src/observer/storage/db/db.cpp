@@ -223,7 +223,7 @@ Table *Db::find_table(int32_t table_id) const
 
 RC Db::open_all_tables()
 {
-  vector<string> table_meta_files;
+  vector<string >table_meta_files;
 
   int ret = list_file(path_.c_str(), TABLE_META_FILE_PATTERN, table_meta_files);
   if (ret < 0) {

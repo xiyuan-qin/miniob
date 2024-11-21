@@ -355,6 +355,7 @@ attr_def:
       $$->type = (AttrType)$2;
       $$->name = $1;
       $$->length = 4;
+      if($2 == static_cast<int>(AttrType::TEXTS)) $$->length = 16;
       free($1);
     }
     ;

@@ -230,39 +230,6 @@ public:
     return RC::SUCCESS;
   }
 
-  /*RC cell_set(int index, Value &cell) {
-    if (index < 0 || index >= static_cast<int>(speces_.size())) {
-      LOG_WARN("invalid argument. index=%d", index);
-      return RC::INVALID_ARGUMENT;
-    }
-
-    FieldExpr       *field_expr = speces_[index];
-    const FieldMeta *field_meta = field_expr->field().meta();
-
-    if (field_meta->type() == AttrType::TEXTS) {
-      // 设置 TEXTS 类型字段逻辑
-      int64_t *offset_ptr = (int64_t *)(this->record_->data() + field_meta->offset());
-      int64_t *length_ptr = (int64_t *)(this->record_->data() + field_meta->offset() + sizeof(int64_t));
-
-      // 调用 Table 类的 write_text 方法，并传入偏移量、长度和数据缓冲区
-      int64_t new_offset = *offset_ptr; // 获取当前偏移量
-      RC rc = table_->write_text(new_offset, cell.length(), const_cast<char*>(cell.data()));
-      if (rc != RC::SUCCESS) {
-        LOG_WARN("failed to store TEXTS field data");
-        return rc;
-      }
-      *offset_ptr = new_offset + cell.length(); // 更新偏移量
-      *length_ptr = cell.length(); // 更新长度
-    } else {
-      if (cell.length() > field_meta->len()) {
-        LOG_WARN("invalid type length from value");
-        return RC::INVALID_ARGUMENT;
-      }
-      char* start = this->record_->data() + field_meta->offset();
-      memcpy(start, cell.data(), cell.length());
-    }
-    return RC::SUCCESS;
-  }*/
 
   RC cell_set(int index, const Value &cell){
     if (index < 0 || index >= static_cast<int>(speces_.size())) {

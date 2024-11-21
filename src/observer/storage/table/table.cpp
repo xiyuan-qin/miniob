@@ -111,6 +111,21 @@ RC Table::create(Db *db, int32_t table_id, const char *name, const char *base_di
   table_meta_.serialize(fs);
   fs.close();
 
+  /*string  text_file_path = table_text_file(base_dir, name); // 获得元数据路径
+
+  // 使用 table_name.table记录一个表的元数据
+  // 判断表文件是否已经存在
+  text_file_fd_ = ::open(text_file_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+
+  if (text_file_fd_ < 0) {
+    if (EEXIST == errno) {
+      LOG_ERROR("Failed to create text file, it has been created. %s, EEXIST, %s", text_file_path.c_str(), strerror(errno));
+      return RC::SCHEMA_TABLE_EXIST;
+    }
+    LOG_ERROR("Create text file failed. filename=%s, errmsg=%d:%s", text_file_path.c_str(), errno, strerror(errno));
+    return RC::IOERR_OPEN;
+  }*/ // 可能会有用，挪到 --> init_text_handler
+
   db_       = db;
   base_dir_ = base_dir;
 
@@ -149,7 +164,7 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
     LOG_ERROR("Failed to open meta file for read. file name=%s, errmsg=%s", meta_file_path.c_str(), strerror(errno));
     return RC::IOERR_OPEN;
   }
-  if (table_meta_.deserialize(fs) < 0) {
+  if (table_meta_.deserialize(fs) < 0) {//
     LOG_ERROR("Failed to deserialize table meta. file name=%s", meta_file_path.c_str());
     fs.close();
     return RC::INTERNAL;
@@ -383,31 +398,58 @@ RC Table::init_record_handler(const char *base_dir)
 }
 
 RC Table::init_text_handler(const char *base_dir) {
-    if (text_file_fd_ >= 0) {
-        return RC::SUCCESS;
+
+   if (text_file_fd_ >= 0) {
+        return RC::SUCCESS;  // 如果文件已打开，直接返回成功
     }
 
-    text_file_path_ = std::string(base_dir) + "/" + name() + "_texts.dat";
+    // 构造文本文件路径
 
-    text_file_fd_ = open(text_file_path_.c_str(), O_RDWR | O_CREAT, 0666);
+    //stringstream ss;
+    //ss << name() << ".text";
+
+    text_file_path_ = table_text_file(base_dir, name()); // 疑似错误
+    
+    // 调用 open 函数并传递 db_、文件路径和 base_dir
+    // RC rc = open(db_, text_file_path_.c_str(), base_dir); // TODO : delete this line
+
+
+    string  text_file_path = table_text_file(base_dir, name()); // 获得元数据路径
+
+    // 使用 table_name.table记录一个表的元数据
+
+    // 判断表文件是否已经存在
+    /**
+     * text_file_fd_ = ::open(text_file_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+     * 可能正确
+     * 可能需要支持“文件可能已存在”的情况
+     */
+    
+    text_file_fd_ = ::open(text_file_path.c_str(), O_RDWR | O_CREAT, 0600);
+
+
     if (text_file_fd_ < 0) {
-        LOG_ERROR("Failed to open text file: %s, Error: %s", text_file_path_.c_str(), strerror(errno));
-        return RC::IOERR_OPEN;
+      if (EEXIST == errno) {
+        LOG_ERROR("Failed to create text file, it has been created. %s, EEXIST, %s", text_file_path.c_str(), strerror(errno));
+        return RC::SCHEMA_TABLE_EXIST;
+      }
+      LOG_ERROR("Create text file failed. filename=%s, errmsg=%d:%s", text_file_path.c_str(), errno, strerror(errno));
+      return RC::IOERR_OPEN;
     }
 
-    // 初始化全局偏移量
     next_text_offset_ = lseek(text_file_fd_, 0, SEEK_END);
     if (next_text_offset_ < 0) {
-        LOG_ERROR("Failed to determine text file size: %s", strerror(errno));
+        LOG_ERROR("Failed to determine text file size for %s: %s", text_file_path_.c_str(), strerror(errno));
+        ::close(text_file_fd_);
+        text_file_fd_ = -1;
         return RC::IOERR_SEEK;
     }
-
     return RC::SUCCESS;
 }
 
 
 
-RC Table::write_text(int64_t offset, int64_t length, const char *buffer) {
+RC Table::write_text(int64_t offset, int64_t length, const char *data) {
     if (length > MAX_TEXT_LENGTH) {
         LOG_ERROR("TEXT data length exceeds the maximum allowed size of %d bytes", MAX_TEXT_LENGTH);
         return RC::INVALID_ARGUMENT;
@@ -425,7 +467,7 @@ RC Table::write_text(int64_t offset, int64_t length, const char *buffer) {
         return RC::IOERR_SEEK;
     }
 
-    ssize_t written = write(text_file_fd_, buffer, length);
+    ssize_t written = write(text_file_fd_, data, length);
     if (written < 0 || written != length) {
         LOG_ERROR("Failed to write text data: Offset: %ld, Length: %ld, Error: %s", offset, length, strerror(errno));
         return RC::IOERR_WRITE;

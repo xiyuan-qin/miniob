@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/rc.h"
 #include "common/type/attr_type.h"
 
+
 class Value;
 
 /**
@@ -80,8 +81,14 @@ public:
   /**
    * @brief 将 val 转换为 string，并将结果保存到 result 中
    */
-  virtual RC to_string(const Value &val, string &result) const { return RC::UNSUPPORTED; }
-
+              virtual RC to_string(const Value &val, string &result) const;
+              /*{
+                if (val.attr_type() == AttrType::TEXTS){
+                    result = val.get_text();
+                    return RC::SUCCESS;
+                }
+                return RC::UNSUPPORTED; 
+              }*/
   /**
    * @brief 计算从 type 到 attr_type 的隐式转换的 cost，如果无法转换，返回 INT32_MAX
    */

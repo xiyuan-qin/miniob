@@ -125,6 +125,7 @@ public:
   string get_string() const;
   bool   get_boolean() const;
   int64_t get_long() const;
+  string get_text() const;
 
 private:
   void set_int(int val);
