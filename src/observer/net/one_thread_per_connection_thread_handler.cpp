@@ -79,7 +79,7 @@ public:
     poll_fd.revents = 0;
 
     while (running_) {
-      int ret = poll(&poll_fd, 1, 500);
+      int ret = poll(&poll_fd, 1, 20000);
       if (ret < 0) {
         LOG_WARN("poll error. fd = %d, ret = %d, error=%s", poll_fd.fd, ret, strerror(errno));
         break;
@@ -90,6 +90,9 @@ public:
 
       if (poll_fd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
         LOG_WARN("poll error. fd = %d, revents = %d", poll_fd.fd, poll_fd.revents);
+        if(poll_fd.revents & POLLERR) LOG_WARN("POLLERR %d %d", poll_fd.fd, poll_fd.revents);
+        if(poll_fd.revents & POLLHUP) LOG_WARN("POLLHUP %d %d", poll_fd.fd, poll_fd.revents);
+        if(poll_fd.revents & POLLNVAL) LOG_WARN("POLLNVAL %d %d", poll_fd.fd, poll_fd.revents);
         break;
       }
 
