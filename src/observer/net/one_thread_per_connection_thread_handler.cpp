@@ -96,11 +96,19 @@ public:
         break;
       }
 
+      //new_add
       RC rc = task_handler_.handle_event(communicator_);
-      if (OB_FAIL(rc)) {
-        LOG_ERROR("handle error. rc = %s", strrc(rc));
-        break;
-      }
+       if (OB_FAIL(rc)) {
+            // 如果超出限制，记录日志并返回错误
+            /*if (rc == RC::TEXT_LIMIT_EXCEEDED) {
+                LOG_WARN("Text limit exceeded for communicator = %p", communicator_);
+                return;  // 返回，停止线程逻辑
+            }*/
+            LOG_ERROR("handle error. rc = %s", strrc(rc));
+
+            // 其他错误退出
+            break;
+        }
     }
 
     LOG_INFO("worker thread stop. communicator = %p", communicator_);

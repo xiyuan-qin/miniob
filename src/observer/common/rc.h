@@ -76,10 +76,11 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(LOGBUF_FULL)                 \
   DEFINE_RC(LOG_FILE_FULL)               \
   DEFINE_RC(LOG_ENTRY_INVALID)           \
+  DEFINE_RC(TEXT_LIMIT_EXCEEDED)         \
   DEFINE_RC(UNSUPPORTED)
 
 enum class RC
-{
+{//new_aad text_limit_exceeded
 #define DEFINE_RC(name) name,
   DEFINE_RCS
 #undef DEFINE_RC
